@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
@@ -878,5 +878,148 @@ export const getAgendaAppointments = onCall(
       }];
     });
     return { ok: true, appointments, truncated: snapshot.size === 500 };
+  }
+);
+
+
+type CreateMemberInvitationInput = { tenantId?: unknown; email?: unknown; role?: unknown };
+type AcceptMemberInvitationInput = { token?: unknown };
+type UpdateMemberAccessInput = { tenantId?: unknown; memberUid?: unknown; role?: unknown; status?: unknown };
+
+async function requireTenantManager(uid: string, tenantId: string) {
+  const access = await requireTenantReader(uid, tenantId);
+  if (!["owner", "admin"].includes(access.role)) {
+    throw new HttpsError("permission-denied", "Apenas proprietários e administradores podem gerir membros.");
+  }
+  return access;
+}
+
+/** Create a one-time invitation token. Only its hash is stored; raw token is returned once for sharing. */
+export const createMemberInvitation = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 10 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as CreateMemberInvitationInput;
+    const tenantId = cleanText(input.tenantId, 128);
+    const email = cleanText(input.email, 254).toLowerCase();
+    const role = cleanText(input.role, 20);
+    if (!validDocumentId(tenantId) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+        !["admin", "staff"].includes(role)) {
+      throw new HttpsError("invalid-argument", "E-mail, empresa ou função inválidos.");
+    }
+    await requireTenantManager(auth.uid, tenantId);
+    const existingUsers = await getAuth().getUserByEmail(email).catch(() => null);
+    if (existingUsers) {
+      const existingMember = await db.doc(`tenants/${tenantId}/members/${existingUsers.uid}`).get();
+      if (existingMember.exists && existingMember.data()?.status === "active") {
+        throw new HttpsError("already-exists", "Este utilizador já pertence à empresa.");
+      }
+    }
+    const token = randomBytes(32).toString("base64url");
+    const tokenHash = sha256(token);
+    const invitationRef = db.doc(`tenants/${tenantId}/invitations/${tokenHash}`);
+    const now = Date.now();
+    await invitationRef.create({
+      tenantId, email, role, status: "pending",
+      invitedBy: auth.uid,
+      expiresAt: new Date(now + 7 * 86400000),
+      createdAt: FieldValue.serverTimestamp()
+    });
+    return {
+      ok: true,
+      invitationId: tokenHash,
+      invitationToken: token,
+      expiresAtMs: now + 7 * 86400000,
+      delivery: "manual"
+    };
+  }
+);
+
+/** Accept a one-time invitation only when the signed-in, verified email matches. */
+export const acceptMemberInvitation = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 10 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as AcceptMemberInvitationInput;
+    const token = cleanText(input.token, 128);
+    if (token.length < 32) throw new HttpsError("invalid-argument", "Convite inválido.");
+    const user = await getAuth().getUser(auth.uid);
+    if (user.disabled || !user.emailVerified || !user.email) {
+      throw new HttpsError("failed-precondition", "Entre com um e-mail confirmado para aceitar o convite.");
+    }
+    const invitationRef = db.doc(`tenants/${cleanText((request.data || {}).tenantId, 128)}/invitations/${sha256(token)}`);
+    // Tenant ID is supplied only as a locator; the invitation and email are verified transactionally.
+    const tenantId = cleanText((request.data || {}).tenantId, 128);
+    if (!validDocumentId(tenantId)) throw new HttpsError("invalid-argument", "Convite inválido.");
+    const memberRef = db.doc(`tenants/${tenantId}/members/${auth.uid}`);
+    const tenantRef = db.doc(`tenants/${tenantId}`);
+    return db.runTransaction(async (tx) => {
+      const [inviteSnap, tenantSnap, memberSnap] = await Promise.all([
+        tx.get(invitationRef), tx.get(tenantRef), tx.get(memberRef)
+      ]);
+      if (!inviteSnap.exists || !tenantSnap.exists || tenantSnap.data()?.status !== "active") {
+        throw new HttpsError("not-found", "Convite não encontrado ou empresa indisponível.");
+      }
+      const invite = inviteSnap.data()!;
+      if (invite.status !== "pending" || invite.email !== user.email!.toLowerCase() ||
+          !(invite.expiresAt?.toDate?.() instanceof Date) || invite.expiresAt.toDate().getTime() <= Date.now()) {
+        throw new HttpsError("failed-precondition", "Convite expirado, utilizado ou destinado a outro e-mail.");
+      }
+      if (memberSnap.exists && memberSnap.data()?.status === "active") {
+        throw new HttpsError("already-exists", "Já tem acesso a esta empresa.");
+      }
+      tx.set(memberRef, {
+        uid: auth.uid, tenantId, email: user.email.toLowerCase(),
+        displayName: cleanText(user.displayName || "", 80),
+        role: invite.role, status: "active",
+        createdAt: FieldValue.serverTimestamp(), invitedBy: invite.invitedBy
+      });
+      tx.update(invitationRef, {
+        status: "accepted", acceptedBy: auth.uid,
+        acceptedAt: FieldValue.serverTimestamp()
+      });
+      const auditRef = db.collection(`tenants/${tenantId}/auditLog`).doc();
+      tx.create(auditRef, {
+        tenantId, actorUid: auth.uid, action: "member.invitation_accepted",
+        resourceType: "member", resourceId: auth.uid, createdAt: FieldValue.serverTimestamp()
+      });
+      return { ok: true, tenantId, role: invite.role };
+    });
+  }
+);
+
+/** Change or suspend a member; owners cannot be modified through this endpoint. */
+export const updateMemberAccess = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 10 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as UpdateMemberAccessInput;
+    const tenantId = cleanText(input.tenantId, 128);
+    const memberUid = cleanText(input.memberUid, 128);
+    const role = cleanText(input.role, 20);
+    const status = cleanText(input.status, 20);
+    if (!validDocumentId(tenantId) || !validDocumentId(memberUid) ||
+        !["admin", "staff"].includes(role) || !["active", "suspended"].includes(status)) {
+      throw new HttpsError("invalid-argument", "Função ou estado do membro inválidos.");
+    }
+    const manager = await requireTenantManager(auth.uid, tenantId);
+    if (manager.role !== "owner" && role === "admin") {
+      throw new HttpsError("permission-denied", "Apenas o proprietário pode promover outro administrador.");
+    }
+    const memberRef = db.doc(`tenants/${tenantId}/members/${memberUid}`);
+    const auditRef = db.collection(`tenants/${tenantId}/auditLog`).doc();
+    await db.runTransaction(async (tx) => {
+      const member = await tx.get(memberRef);
+      if (!member.exists || member.data()?.role === "owner") {
+        throw new HttpsError("failed-precondition", "O proprietário ou membro não pode ser alterado desta forma.");
+      }
+      tx.update(memberRef, { role, status, updatedAt: FieldValue.serverTimestamp(), updatedBy: auth.uid });
+      tx.create(auditRef, {
+        tenantId, actorUid: auth.uid, action: "member.access_updated",
+        resourceType: "member", resourceId: memberUid, role, status,
+        createdAt: FieldValue.serverTimestamp()
+      });
+    });
+    return { ok: true, memberUid, role, status };
   }
 );
