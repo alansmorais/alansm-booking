@@ -8,7 +8,9 @@ Standalone multi-tenant booking SaaS for barbershops, beauty salons, and nail pr
 - This repository is independent from the AlanSM Solutions marketing website.
 
 ## Current preview status
-- Responsive static dashboard UI with overview, appointments, professionals, services, clients, public booking page placeholder and settings.
+- Responsive demo dashboard with overview, weekly calendar, appointments, professionals, services, clients, public booking page placeholder and settings.
+- Demo availability engine applies opening hours, lunch break, service duration, blocked time and professional-specific appointment overlap checks.
+- Demo booking form offers available 30-minute start slots and revalidates availability before adding an in-memory appointment.
 - Demo data is fictitious and held in browser memory only.
 - Initial Google Apps Script pilot foundation and spreadsheet schema are in `apps-script/`.
 - Data model and server-side invariants are documented in `docs/DATA_MODEL.md`.
