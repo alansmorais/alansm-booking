@@ -1,6 +1,6 @@
-# Google Apps Script pilot backend
+# Archived pilot backend reference — Google Apps Script
 
-This is a bootstrap foundation, not a production-ready API.
+This is a retained pilot/learning reference. **It is not the selected official backend.** The official product direction is Firebase Authentication + Cloud Firestore + trusted Cloud Functions/Cloud Run; see `docs/FIREBASE_ARCHITECTURE.md`. Do not deploy this Apps Script project or connect a live spreadsheet for the official SaaS.
 
 ## Included
 - Versioned spreadsheet schema and non-destructive setup.
@@ -22,7 +22,7 @@ The browser preview currently saves fictitious workspace data in versioned `loca
 ## Important
 The HTTP API is deliberately not wired to registration/login yet. The service functions require a configured spreadsheet schema and secret. Do not deploy or use with real customer data until runtime benchmarks, endpoint validation, abuse controls, tenant-isolation tests, CSRF/origin strategy for browser use, and independent security review are complete.
 
-## Safe setup
+## Historical notes (do not deploy for official product)
 1. Create a dedicated spreadsheet.
 2. Create a standalone Apps Script project.
 3. Copy all `.gs` files from this directory.
