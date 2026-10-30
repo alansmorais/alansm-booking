@@ -12,7 +12,7 @@
 
     return Object.freeze({
       mode: "demo",
-      async getSession() {
+      getSession() {
         return {
           mode: "demo",
           user: null,
@@ -26,16 +26,16 @@
           }]
         };
       },
-      async createTenant() {
+      createTenant() {
         throw new Error(NOT_CONNECTED);
       },
-      async getCatalog() {
+      getCatalog() {
         return dataAdapter.getCatalog();
       },
-      async getAgenda({ dateFrom = "", dateTo = "", professionalId = "" } = {}) {
+      getAgenda({ dateFrom = "", dateTo = "", professionalId = "" } = {}) {
         return dataAdapter.getAppointments({ dateFrom, dateTo, professionalId });
       },
-      async getSchedule() {
+      getSchedule() {
         return dataAdapter.getScheduleData();
       }
     });
