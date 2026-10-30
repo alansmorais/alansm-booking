@@ -234,6 +234,52 @@ test("tenant managers can list members without exposing invitation tokens", asyn
   });
   assert.equal(updated.data.result?.ok, true, JSON.stringify(updated.data));
   assert.equal(updated.data.result.status, "suspended");
+
+  const reactivated = await callable("updateMemberAccess", {
+    tenantId, memberUid: staff.uid, role: "staff", status: "active"
+  });
+  assert.equal(reactivated.data.result?.ok, true, JSON.stringify(reactivated.data));
+  assert.equal(reactivated.data.result.status, "active");
+});
+
+test("admin can manage staff but cannot invite or promote another admin", async () => {
+  const adminEmail = `admin-${Date.now()}@example.test`;
+  const invitation = await callable("createMemberInvitation", {
+    tenantId, email: adminEmail, role: "admin"
+  });
+  assert.equal(invitation.data.result?.ok, true, JSON.stringify(invitation.data));
+
+  const adminUser = await adminAuth.createUser({
+    email: adminEmail, password: "Test-password-123!", emailVerified: true
+  });
+  const adminCustomToken = await adminAuth.createCustomToken(adminUser.uid);
+  const adminSignin = await jsonRequest(`${AUTH}/accounts:signInWithCustomToken?key=fake-api-key`, {
+    token: adminCustomToken, returnSecureToken: true
+  });
+  assert.equal(adminSignin.status, 200, JSON.stringify(adminSignin.data));
+  const accepted = await callable("acceptMemberInvitation", {
+    tenantId, token: invitation.data.result.invitationToken
+  }, adminSignin.data.idToken);
+  assert.equal(accepted.data.result?.ok, true, JSON.stringify(accepted.data));
+
+  const staffEmail = `admin-created-staff-${Date.now()}@example.test`;
+  const staffInvite = await callable("createMemberInvitation", {
+    tenantId, email: staffEmail, role: "staff"
+  }, adminSignin.data.idToken);
+  assert.equal(staffInvite.data.result?.ok, true, JSON.stringify(staffInvite.data));
+
+  const forbiddenAdminInvite = await callable("createMemberInvitation", {
+    tenantId, email: `second-admin-${Date.now()}@example.test`, role: "admin"
+  }, adminSignin.data.idToken);
+  assert.equal(forbiddenAdminInvite.data.error?.status, "PERMISSION_DENIED", JSON.stringify(forbiddenAdminInvite.data));
+
+  const ownerList = await callable("getTenantMembers", { tenantId });
+  const existingAdmin = ownerList.data.result.members.find((member) => member.uid === adminUser.uid);
+  assert.ok(existingAdmin);
+  const forbiddenPromotion = await callable("updateMemberAccess", {
+    tenantId, memberUid: adminUser.uid, role: "staff", status: "active"
+  }, adminSignin.data.idToken);
+  assert.equal(forbiddenPromotion.data.error?.status, "PERMISSION_DENIED", JSON.stringify(forbiddenPromotion.data));
 });
 
 test("owner membership cannot be suspended or changed", async () => {
