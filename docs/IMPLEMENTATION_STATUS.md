@@ -173,3 +173,11 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Added automated tests for successful acceptance ordering, unauthenticated users, unverified email and malformed invitation links. The contract is loaded as a dormant browser module but is not instantiated by the demo app.
 - The previous invitation-adapter test exposed a cross-realm assertion issue in the test harness, not a product behavior issue; the assertion was narrowed to compare the actual scalar fields. The follow-up CI run must confirm the correction.
 - No invitation links are currently generated or distributed by the preview, and no Firebase credentials or live services are configured.
+
+
+## Invitation entry page (2026-10-30)
+- Added a tablet/mobile-friendly invitation entry panel for links containing `tenantId` and `invite` query parameters.
+- The page distinguishes ordinary access, complete invitation links and malformed links. It does not display the raw invitation token.
+- Invitees can choose the existing sign-in or registration tab. The page clearly states that real acceptance is not enabled in this demo until Firebase authentication is approved and configured.
+- Added parser tests and included the new page module in frontend syntax checks and CI tests.
+- The panel is presentation-only in demo mode: it does not authenticate, accept an invitation, call Firebase or grant access. No production routing or Firebase configuration was changed.
