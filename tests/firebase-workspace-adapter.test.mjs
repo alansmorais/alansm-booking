@@ -61,7 +61,7 @@ test("Firebase workspace rejects invalid agenda interval and missing tenant", as
         : {} });
     }
   });
-  assert.equal((await adapter.getCatalog({})).ok, true);
+  await assert.doesNotReject(adapter.getCatalog({}));
   await assert.rejects(adapter.getAgenda({ tenantId: "tenant-1", startAtMs: 5, endAtMs: 5 }), /intervalo válido/);
 });
 
