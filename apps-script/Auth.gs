@@ -4,7 +4,7 @@ function registerTenant_(input) {
   const email = normalizeEmail_(input.email);
   const password = String(input.password || "");
   if (name.length < 2) throw new Error("BUSINESS_NAME_REQUIRED");
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error("INVALID_EMAIL");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("INVALID_EMAIL");
   if (password.length < 12 || password.length > 128) throw new Error("PASSWORD_MUST_BE_12_TO_128_CHARS");
 
   const lock = LockService.getScriptLock();
@@ -14,7 +14,7 @@ function registerTenant_(input) {
     const now = nowIso_();
     const tenantId = newId_();
     const userId = newId_();
-    const slug = name.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g,"")
+    const slug = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
       .replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,48) + "-" + tenantId.slice(0,6);
     const hashed = passwordHash_(password);
     appendObject_("Tenants", {
