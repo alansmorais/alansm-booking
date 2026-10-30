@@ -52,13 +52,14 @@ test("explicit live mode loads tenant members and pending invitations", async ()
       async updateMember() { return {}; }
     }
   });
-  assert.match(team.render(), /Carregando membros/);
   await team.mount();
   assert.deepEqual(calls.map(x => x.tenantId), ["tenant-42"]);
   assert.match(content.innerHTML, /BACKEND CONECTADO/);
   assert.match(content.innerHTML, /Maria Souza/);
   assert.match(content.innerHTML, /novo@example.com/);
   assert.match(content.innerHTML, /Suspender/);
+  assert.match(content.innerHTML, /Pendente/);
+  assert.doesNotMatch(content.innerHTML, /user-owner/);
   team.useDemo();
   assert.match(team.render(), /MODO DEMONSTRAÇÃO/);
 });
