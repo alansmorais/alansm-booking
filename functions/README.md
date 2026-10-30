@@ -5,6 +5,9 @@ This directory contains the first trusted backend endpoints for AlanSM Booking.
 ## Implemented
 - `createTenant`: authenticated and email-verified user creates a tenant; slug reservation and owner membership are written in one Firestore transaction.
 - `getSession`: returns the authenticated user's active tenant memberships and safe tenant summaries.
+- `cancelAppointment`: owner/admin-only cancellation scaffold; validates active membership and tenant state, applies an allowed status transition and writes the audit event in the same Firestore transaction.
+
+`cancelAppointment` is not yet wired to the frontend and does not release a booking lock, because booking creation/lock storage has not been implemented. Do not expose it to users until integration tests cover role denial, cross-tenant denial, idempotent retries and audit atomicity.
 
 ## Security notes
 - These functions use Firebase Admin SDK, which bypasses Firestore Security Rules. Every handler must validate identity, membership, role, tenant ownership and input independently.
