@@ -107,3 +107,11 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Added tests for demo tenant isolation, delegated reads and refusal to operate with non-demo dependencies.
 - GitHub Actions now validates the workspace adapter syntax and runs its contract tests alongside the existing adapter tests.
 - This is an interface boundary, not a live tenant system. Firebase authentication, tenant onboarding and workspace reads remain disconnected from the frontend.
+
+## Tenant onboarding flow preparation (2026-10-30)
+- Added `public/onboarding-flow.js` to define the ordered future registration flow: create auth account, send email verification, reload the verified user, create tenant, then load session.
+- The flow refuses to create a tenant until the authenticated user is confirmed as email-verified.
+- Added slug normalization for accents, punctuation and length. Registration UI now suggests a public slug from the business name while allowing manual edits.
+- Added tests for slug normalization, invalid input, unverified-email blocking and the successful verified sequence.
+- The flow is an injectable orchestration contract only. The current demo auth/workspace adapters do not provide Firebase operations, so no live registration or tenant creation is possible.
+- CI checks the onboarding module and runs its tests. Firebase Auth SDK integration and live confirmation-email handling remain pending an approved Firebase test project.
