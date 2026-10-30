@@ -194,3 +194,19 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Added automated tests for the team screen's safe default (local demo), refusal to enable live mode without an explicitly marked Firebase adapter and tenant ID, and explicit live-mode member/invitation loading.
 - Added the team contract test to the preview CI workflow.
 - These tests use mocked adapters only; they do not initialize Firebase, authenticate users or contact a live backend.
+
+## Current verified snapshot (2026-10-30 — preview)
+- Latest observed GitHub Actions run: **41114424858**, commit `c65869d`, completed successfully.
+- Passing jobs: frontend/configuration validation (including adapter, onboarding, invitation and team contract tests); Firestore security rules emulator tests; Firebase Auth/Functions emulator integration tests; Firebase Functions TypeScript compilation.
+- Team management screen is present in the preview. Its default mode is local demonstration data only. A separately injected Firebase mode can list members, create invitations and suspend/reactivate non-owner memberships, but the application does not instantiate that mode.
+- Invitation acceptance entry screen and the invitation-flow contract are present, but they are not connected to the sign-in/register UI.
+- The Firebase auth/workspace adapters are dormant factories. There is no Firebase client initialization or configured project.
+- No live Firebase project, billing, secrets, deployed Functions, email delivery provider, production domain or real customer records are connected.
+- The CI success proves the automated checks in the listed jobs passed; it does not prove a production deployment or end-to-end behavior against a real Firebase project.
+
+## Next implementation gate
+1. Complete a focused security review of tenant authorization, member roles, invitation lifecycle, client data access, schedule mutations and booking transactions. Track each finding and add emulator tests for any uncovered behavior.
+2. Review and tighten Firestore client read rules, especially client/contact records, so access follows least privilege. Keep all mutations behind trusted callable Functions.
+3. Add end-to-end emulator tests for booking idempotency/replay, concurrent overlapping booking attempts, cancellation transitions, schedule/exception/block authorization, invitation expiry/wrong-email/replay, owner protection and cross-tenant denial.
+4. Add explicit App Check enforcement and browser Firebase initialization only after a dedicated test Firebase project is approved and its configuration is supplied. Until then, keep all Firebase factories dormant.
+5. After approval, connect preview to the dedicated test project only, run manual tablet verification, and document rollback steps. Production remains out of scope and requires separate explicit approval.
