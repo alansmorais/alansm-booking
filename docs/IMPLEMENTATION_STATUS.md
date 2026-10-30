@@ -46,7 +46,7 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - The forms are explicitly non-functional placeholders and do not send or persist credentials.
 - A clear warning instructs users not to enter real passwords.
 - A separate action enters the existing local demo dashboard.
-- Firebase callable Functions `createTenant`, `getSession` and `cancelAppointment` exist as source scaffolding, but are not confirmed compiled, emulator-tested or deployed.
+- Firebase callable Functions `createTenant`, `getSession`, `cancelAppointment` and `createAppointment` exist as source scaffolding, but are not confirmed compiled, emulator-tested or deployed.
 - `cancelAppointment` currently restricts cancellation to active owners/admins and atomically writes appointment status plus an audit event. It is not connected to the UI and must not be exposed before role, tenant-isolation, idempotency and audit tests pass.
 - Booking creation, server-side schedule validation, overlap locks, cancellation lock release and public booking are not implemented yet.
 - Do not describe login, registration or tenant creation as live.
