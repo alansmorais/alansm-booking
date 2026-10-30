@@ -42,6 +42,26 @@ test("createTenant rejects unauthenticated calls", async () => {
   assert.notEqual(result.data.result?.ok, true);
 });
 
+test("createTenant rejects users whose email is not verified", async () => {
+  const unverifiedEmail = `unverified-${Date.now()}@example.test`;
+  const signup = await jsonRequest(`${AUTH}/accounts:signUp?key=fake-api-key`, {
+    email: unverifiedEmail,
+    password: "Test-password-123!",
+    returnSecureToken: true
+  });
+  assert.equal(signup.status, 200, JSON.stringify(signup.data));
+
+  const result = await callable("createTenant", {
+    name: "Empresa não verificada",
+    slug: `unverified-${Date.now()}`,
+    timezone: "Europe/Warsaw",
+    currency: "PLN"
+  }, signup.data.idToken);
+
+  assert.notEqual(result.data.result?.ok, true);
+  assert.equal(result.data.error?.status, "FAILED_PRECONDITION", JSON.stringify(result.data));
+});
+
 test("createTenant creates a tenant and owner membership for verified user", async () => {
   const slug = `ci-${Date.now()}`;
   const result = await callable("createTenant", {
