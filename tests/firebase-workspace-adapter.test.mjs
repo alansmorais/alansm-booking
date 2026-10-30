@@ -1,0 +1,59 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import vm from "node:vm";
+
+const source = await readFile(new URL("../public/firebase-workspace-adapter.js", import.meta.url), "utf8");
+const window = {};
+vm.runInNewContext(source, { window, Object, TypeError, Error, Number });
+
+test("Firebase workspace calls tenant-scoped callable functions", async () => {
+  const calls = [];
+  const user = { emailVerified: true };
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => user },
+    httpsCallable(_functions, name) {
+      return async (payload) => {
+        calls.push({ name, payload });
+        return { data: { ok: true, name } };
+      };
+    }
+  });
+  assert.equal(adapter.mode, "firebase");
+  assert.equal((await adapter.createTenant({ name: "Barbearia", slug: "barbearia" })).name, "createTenant");
+  assert.equal((await adapter.getSession()).name, "getSession");
+  assert.equal((await adapter.getCatalog({ tenantId: "tenant-1" })).name, "getTenantCatalog");
+  assert.equal((await adapter.getAgenda({
+    tenantId: "tenant-1", startAtMs: 1000, endAtMs: 2000, professionalId: "pro-1"
+  })).name, "getAgendaAppointments");
+  assert.deepEqual(calls.map((call) => call.name), [
+    "createTenant", "getSession", "getTenantCatalog", "getAgendaAppointments"
+  ]);
+  assert.equal(calls[2].payload.tenantId, "tenant-1");
+  assert.equal(calls[3].payload.professionalId, "pro-1");
+});
+
+test("Firebase workspace blocks tenant creation for unverified users", async () => {
+  let invoked = false;
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: false }) },
+    httpsCallable() {
+      invoked = true;
+      return async () => ({ data: {} });
+    }
+  });
+  await assert.rejects(adapter.createTenant({ name: "Barbearia", slug: "barbearia" }), /Confirme o seu e-mail/);
+  assert.equal(invoked, false);
+});
+
+test("Firebase workspace rejects invalid agenda interval and missing tenant", async () => {
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable() { return async () => ({ data: {} }); }
+  });
+  await assert.rejects(adapter.getCatalog({}), /Selecione uma empresa/);
+  await assert.rejects(adapter.getAgenda({ tenantId: "tenant-1", startAtMs: 5, endAtMs: 5 }), /intervalo válido/);
+});
