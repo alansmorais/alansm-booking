@@ -568,3 +568,86 @@ export const createAppointment = onCall(
     });
   }
 );
+
+type ScheduleAdminInput = { tenantId?: unknown; scope?: unknown; professionalId?: unknown; days?: unknown };
+async function requireScheduleAdmin(uid: string, tenantId: string) {
+  const [user, tenant, member] = await Promise.all([
+    getAuth().getUser(uid), db.doc(`tenants/${tenantId}`).get(),
+    db.doc(`tenants/${tenantId}/members/${uid}`).get()
+  ]);
+  if (user.disabled || !tenant.exists || tenant.data()?.status !== "active" ||
+      !member.exists || member.data()?.status !== "active") {
+    throw new HttpsError("permission-denied", "Não tem acesso a esta empresa.");
+  }
+  if (!["owner", "admin"].includes(cleanText(member.data()?.role, 20))) {
+    throw new HttpsError("permission-denied", "Apenas proprietários e administradores podem alterar horários.");
+  }
+  return tenant.data()!;
+}
+function validatePeriods(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length > 2) return false;
+  let lastEnd = -1;
+  for (const raw of value) {
+    if (!raw || typeof raw !== "object") return false;
+    const p = raw as { start?: unknown; end?: unknown; breaks?: unknown };
+    const start = clockMinutes(p.start), end = clockMinutes(p.end);
+    if (start === null || end === null || start >= end || start < lastEnd) return false;
+    lastEnd = end;
+    const breaks = p.breaks ?? [];
+    if (!Array.isArray(breaks) || breaks.length > 4) return false;
+    let breakEnd = start;
+    for (const rawBreak of breaks) {
+      if (!rawBreak || typeof rawBreak !== "object") return false;
+      const b = rawBreak as { start?: unknown; end?: unknown };
+      const bs = clockMinutes(b.start), be = clockMinutes(b.end);
+      if (bs === null || be === null || bs >= be || bs < start || be > end || bs < breakEnd) return false;
+      breakEnd = be;
+    }
+  }
+  return true;
+}
+
+/** Owner/admin-only weekly schedule update. */
+export const saveScheduleSettings = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 10 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as ScheduleAdminInput;
+    const tenantId = cleanText(input.tenantId, 128);
+    const scope = cleanText(input.scope, 20);
+    const professionalId = cleanText(input.professionalId, 128);
+    if (!validDocumentId(tenantId) || !["company", "professional"].includes(scope) ||
+        (scope === "professional" && !validDocumentId(professionalId))) {
+      throw new HttpsError("invalid-argument", "Empresa ou profissional inválido.");
+    }
+    const tenant = await requireScheduleAdmin(auth.uid, tenantId);
+    if (scope === "professional" &&
+        !(await db.doc(`tenants/${tenantId}/professionals/${professionalId}`).get()).exists) {
+      throw new HttpsError("not-found", "Profissional não encontrado.");
+    }
+    if (!input.days || typeof input.days !== "object" || Array.isArray(input.days)) {
+      throw new HttpsError("invalid-argument", "Informe os horários da semana.");
+    }
+    const source = input.days as Record<string, unknown>;
+    if (Object.keys(source).some((key) => !/^[0-6]$/.test(key))) {
+      throw new HttpsError("invalid-argument", "Os dias da semana devem usar números de 0 a 6.");
+    }
+    const days: Record<string, unknown> = {};
+    for (let day = 0; day <= 6; day++) {
+      const periods = source[String(day)] ?? [];
+      if (!validatePeriods(periods)) throw new HttpsError("invalid-argument", `Horários inválidos para o dia ${day}.`);
+      days[String(day)] = periods;
+    }
+    const id = scope === "company" ? "company" : `professional_${professionalId}`;
+    const ref = db.doc(`tenants/${tenantId}/scheduleSettings/${id}`);
+    const audit = db.collection(`tenants/${tenantId}/auditLog`).doc();
+    const now = FieldValue.serverTimestamp();
+    await db.runTransaction(async (tx) => {
+      tx.set(ref, { tenantId, scope, professionalId: scope === "professional" ? professionalId : null,
+        timezone: cleanText(tenant.timezone, 80), days, updatedAt: now, updatedBy: auth.uid });
+      tx.create(audit, { tenantId, actorUid: auth.uid, action: "schedule.updated",
+        resourceType: "schedule", resourceId: id, createdAt: now });
+    });
+    return { ok: true, scheduleId: id };
+  }
+);
