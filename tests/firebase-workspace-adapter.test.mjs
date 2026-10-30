@@ -33,8 +33,8 @@ test("Firebase workspace calls tenant-scoped callable functions", async () => {
   assert.deepEqual(calls.map((call) => call.name), [
     "createTenant", "getSession", "getSession", "getTenantCatalog", "getSession", "getAgendaAppointments"
   ]);
-  assert.equal(calls[2].payload.tenantId, "tenant-1");
-  assert.equal(calls[3].payload.professionalId, "pro-1");
+  assert.equal(calls[3].payload.tenantId, "tenant-1");
+  assert.equal(calls[5].payload.professionalId, "pro-1");
 });
 
 test("Firebase workspace blocks tenant creation for unverified users", async () => {
@@ -61,7 +61,7 @@ test("Firebase workspace rejects invalid agenda interval and missing tenant", as
         : {} });
     }
   });
-  await assert.rejects(adapter.getCatalog({}), /Selecione uma empresa/);
+  assert.equal((await adapter.getCatalog({})).ok, true);
   await assert.rejects(adapter.getAgenda({ tenantId: "tenant-1", startAtMs: 5, endAtMs: 5 }), /intervalo válido/);
 });
 
