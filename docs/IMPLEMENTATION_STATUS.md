@@ -150,3 +150,11 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Member access can be set to active or suspended. The owner membership cannot be changed through this endpoint. Admins cannot modify another admin.
 - Added integration tests for invitation, acceptance, replay prevention, member listing, suspension and staff authorization.
 - This backend is not connected to the demo UI and no live Firebase project or email provider is configured. Manual invitation-token sharing is a development-stage mechanism, not the final customer-facing invitation experience.
+
+ 
+## Firebase workspace member adapter (2026-10-30)
+- Extended the dormant Firebase workspace adapter with tenant-scoped methods for listing members, creating invitations and updating member access.
+- Every operation refreshes the authenticated session and resolves the selected tenant from current memberships before invoking a callable Function. The backend remains authoritative for owner/admin authorization.
+- The adapter normalizes invitation e-mail addresses and validates allowed roles/statuses before making calls. It does not expose member-management operations through the demo adapter.
+- Added mocked tests for tenant scoping, e-mail normalization and rejection of invalid roles/statuses before any mutation call.
+- These methods are not instantiated by the demo app. No invitation token is generated and no live Firebase call is made in the preview.
