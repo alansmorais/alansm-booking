@@ -85,7 +85,7 @@ Public:
 - `GET /v1/public/{slug}/availability` — return available slots only.
 - `POST /v1/public/{slug}/appointments` — validate public booking, abuse controls and idempotency.
 
-The two callable functions above are implemented as source scaffolding; the remaining routes are design-only and not implemented. The current UI must remain in demo mode until end-to-end implementation and tests exist.
+The callable functions `createTenant`, `getSession` and `cancelAppointment` exist as source scaffolding. `cancelAppointment` is owner/admin-only and writes the cancellation state plus audit event atomically, but it is not wired to the frontend and must not be exposed until emulator integration tests cover its authorization and state transitions. Appointment creation, availability and public booking remain design-only. The current UI must remain in demo mode until end-to-end implementation and tests exist.
 
 ## Local/demo persistence
 
