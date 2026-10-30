@@ -29,7 +29,7 @@
         <label>E-mail<input name="email" type="email" autocomplete="email" placeholder="voce@empresa.com" required></label>
         <label>Palavra-passe<input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="Mínimo de 8 caracteres" required></label>
         <label>Nome da empresa<input name="businessName" maxlength="80" placeholder="Ex.: Barbearia Central" required></label>
-        <label>Endereço público pretendido<input name="slug" maxlength="40" placeholder="barbearia-central" required></label>
+        <label>Endereço público pretendido<input name="slug" maxlength="40" placeholder="barbearia-central" required><small class="auth-field-hint" id="slugPreview">O endereço será usado no link público da sua empresa.</small></label>
         <button class="primary-btn auth-submit" type="submit">Preparar a minha conta</button>
       </form>
       <div class="auth-notice"><strong>Autenticação Firebase em preparação</strong><span>O registo e o login ainda não estão ligados a um serviço real. Não introduza palavras-passe verdadeiras nesta demonstração.</span></div>
@@ -81,6 +81,7 @@
   <script src="./data-adapter.js"></script>
   <script src="./auth-adapter.js"></script>
   <script src="./workspace-adapter.js"></script>
+  <script src="./onboarding-flow.js"></script>
   <script src="./app.js"></script>
   <script src="./auth.js"></script>
 </body>
