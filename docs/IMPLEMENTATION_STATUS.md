@@ -48,7 +48,9 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - A separate action enters the existing local demo dashboard.
 - Firebase callable Functions `createTenant`, `getSession`, `cancelAppointment` and `createAppointment` exist as source scaffolding, but are not confirmed compiled, emulator-tested or deployed.
 - `cancelAppointment` currently restricts cancellation to active owners/admins and atomically writes appointment status plus an audit event. It is not connected to the UI and must not be exposed before role, tenant-isolation, idempotency and audit tests pass.
-- `createAppointment` now checks company/professional schedules, breaks, company closure dates, professional absence dates and date-specific blocks in the tenant timezone, in addition to transaction-based overlap guards and idempotency. The schedule data documents still need trusted setup handlers; multi-day absences must be expanded into per-date records; appointments crossing local midnight are rejected. It is not connected to the frontend or ready for real bookings.
+- `createAppointment` checks company/professional schedules, breaks, company closure dates, professional absence dates and date-specific blocks in the tenant timezone, in addition to transaction-based overlap guards and idempotency. Appointments crossing local midnight are rejected.
+- Trusted schedule administration callables now exist: `saveScheduleSettings`, `saveScheduleException` and `saveScheduleBlock`. They enforce active owner/admin membership, validate inputs, write tenant-scoped records and append audit events. Absence/closure ranges are expanded to per-date records, capped at 90 days per operation.
+- These callables and booking flows are still not connected to the frontend or emulator-verified; do not use for real bookings.
 - Concurrent booking behavior, idempotency replay, cancellation and audit behavior still require emulator integration tests. Public booking is not implemented.
 - Do not describe login, registration or tenant creation as live.
 
@@ -63,3 +65,10 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Auth integration coverage also verifies that an account with an unverified email cannot create a tenant.
 - No production Firebase project, secrets, billing or live user data are used by these tests.
 - Workflow files and tests have been committed, but a successful GitHub Actions run has not yet been observed; do not mark CI green until the run is checked.
+
+
+## Trusted schedule administration (2026-10-30)
+- Added server-side weekly schedule save for company and professionals. Each day supports up to two ordered work periods and bounded, non-overlapping breaks.
+- Added company closure and professional absence date ranges, stored per local date in the tenant timezone; each request is limited to 90 days.
+- Added create/update/remove operations for professional-specific or company-wide time blocks.
+- All three endpoints require an active owner/admin membership, use tenant-scoped document paths, and create audit records. They are backend scaffolds only; emulator tests and frontend wiring remain outstanding.
