@@ -42,3 +42,11 @@ Dates and clock times are interpreted in the tenant's IANA timezone. The current
 6. Add automated tests for duplicate slugs, unverified/disabled users, tenant isolation, role checks and transaction retries before integration.
 
 No Firebase project, billing account, credentials, or production deployment is configured by this repository change.
+
+
+## Tenant-scoped read APIs
+
+- `getTenantCatalog`: requires an authenticated active tenant member with owner/admin/staff role; returns only active professional and service display fields, never client records or contact details.
+- `getAgendaAppointments`: requires the same membership and role check; accepts an epoch-millisecond interval of at most 31 days, optional professional filter, returns appointments intersecting the requested interval and omits free-text notes and client PII. Results are capped at 500 and expose a truncation flag.
+- `tenantId` is a locator only. Authorization is always derived from the verified caller UID and active membership document.
+- These read APIs are not connected to the preview UI or a live Firebase project. Client date boundaries must be calculated using the tenant timezone before calling the agenda endpoint.
