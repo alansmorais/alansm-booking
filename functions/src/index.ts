@@ -303,6 +303,43 @@ const MAX_SERVICE_MINUTES = 8 * 60;
 const MAX_BOOKING_DAYS_AHEAD = 180;
 const ACTIVE_APPOINTMENT_STATUSES = new Set(["pending", "booked", "confirmed"]);
 
+type SchedulePeriod = { start?: unknown; end?: unknown; breaks?: unknown };
+function localDateParts(date: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+    weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+  }).formatToParts(date);
+  const getPart = (type: string) => parts.find((p) => p.type === type)?.value || "";
+  const weekday = ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 } as Record<string, number>)[getPart("weekday")];
+  return {
+    date: `${getPart("year")}-${getPart("month")}-${getPart("day")}`,
+    weekday,
+    minute: Number(getPart("hour")) * 60 + Number(getPart("minute"))
+  };
+}
+function clockMinutes(value: unknown): number | null {
+  if (typeof value !== "string" || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(value)) return null;
+  const [h, m] = value.split(":").map(Number);
+  return h * 60 + m;
+}
+function scheduleCovers(periods: unknown, start: number, end: number): boolean {
+  if (!Array.isArray(periods)) return false;
+  return periods.some((raw) => {
+    if (!raw || typeof raw !== "object") return false;
+    const p = raw as SchedulePeriod;
+    const pStart = clockMinutes(p.start), pEnd = clockMinutes(p.end);
+    if (pStart === null || pEnd === null || pStart >= pEnd || start < pStart || end > pEnd) return false;
+    const breaks = Array.isArray(p.breaks) ? p.breaks : [];
+    return !breaks.some((b) => {
+      if (!b || typeof b !== "object") return false;
+      const item = b as { start?: unknown; end?: unknown };
+      const bStart = clockMinutes(item.start), bEnd = clockMinutes(item.end);
+      return bStart !== null && bEnd !== null && bStart < bEnd && start < bEnd && bStart < end;
+    });
+  });
+}
+
+
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -420,6 +457,52 @@ export const createAppointment = onCall(
       }
 
       const guardSnaps = await Promise.all(guardRefs.map((ref) => tx.get(ref)));
+
+      const timezone = cleanText(tenantSnap.data()?.timezone, 80);
+      if (!validTimezone(timezone)) {
+        throw new HttpsError("failed-precondition", "A empresa precisa de um fuso horário válido.");
+      }
+      const localStart = localDateParts(startAt, timezone);
+      const localEnd = localDateParts(new Date(endMs - 1), timezone);
+      if (localStart.date !== localEnd.date || !Number.isInteger(localStart.weekday)) {
+        throw new HttpsError("failed-precondition", "Reservas que atravessam a meia-noite local ainda não são suportadas.");
+      }
+
+      const companyScheduleRef = db.doc(`tenants/${tenantId}/scheduleSettings/company`);
+      const professionalScheduleRef = db.doc(`tenants/${tenantId}/scheduleSettings/professional_${professionalId}`);
+      const companyExceptionRef = db.doc(`tenants/${tenantId}/scheduleExceptions/${localStart.date}`);
+      const professionalExceptionRef = db.doc(`tenants/${tenantId}/professionalExceptions/${professionalId}_${localStart.date}`);
+      const blocksQuery = db.collection(`tenants/${tenantId}/blocks`).where("date", "==", localStart.date);
+      const [companyScheduleSnap, professionalScheduleSnap, companyExceptionSnap,
+        professionalExceptionSnap, blocksSnap] = await Promise.all([
+        tx.get(companyScheduleRef), tx.get(professionalScheduleRef),
+        tx.get(companyExceptionRef), tx.get(professionalExceptionRef), tx.get(blocksQuery)
+      ]);
+
+      if (companyExceptionSnap.exists || professionalExceptionSnap.exists) {
+        throw new HttpsError("failed-precondition", "A empresa ou o profissional está indisponível nesta data.");
+      }
+      const dayKey = String(localStart.weekday);
+      const companyPeriods = companyScheduleSnap.data()?.days?.[dayKey];
+      const professionalPeriods = professionalScheduleSnap.data()?.days?.[dayKey];
+      const localEndMinute = localEnd.minute + 1;
+      if (!scheduleCovers(companyPeriods, localStart.minute, localEndMinute) ||
+          !scheduleCovers(professionalPeriods, localStart.minute, localEndMinute)) {
+        throw new HttpsError("failed-precondition", "O horário está fora do funcionamento da empresa ou do profissional, ou inclui uma pausa.");
+      }
+
+      const blocked = blocksSnap.docs.some((doc) => {
+        const block = doc.data();
+        if (block.professionalId && block.professionalId !== professionalId) return false;
+        const blockStart = clockMinutes(block.start);
+        const blockEnd = clockMinutes(block.end);
+        return blockStart !== null && blockEnd !== null &&
+          localStart.minute < blockEnd && blockStart < localEndMinute;
+      });
+      if (blocked) {
+        throw new HttpsError("already-exists", "Este horário está bloqueado.");
+      }
+
       const searchStart = new Date(startMs - MAX_SERVICE_MINUTES * 60_000);
       const searchEnd = new Date(endMs);
       const existingQuery = db.collection(`tenants/${tenantId}/appointments`)
