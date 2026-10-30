@@ -31,10 +31,11 @@ jobs:
         run: |
           node --check public/app.js
           node --check public/auth.js
+          node --check public/auth-adapter.js
           node --check public/availability.js
           node --check public/data-adapter.js
       - name: Test demo data adapter
-        run: npm run test:adapter
+        run: npm run test:adapter && npm run test:auth-adapter
 
       - name: Validate JSON configuration
         run: |
