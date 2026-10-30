@@ -8,11 +8,12 @@ Standalone multi-tenant booking SaaS for barbershops, beauty salons, and nail pr
 - This repository is independent from the AlanSM Solutions marketing website.
 
 ## Current preview status
-- Responsive dashboard UI with overview, appointments, professionals, services, clients, public booking page placeholder and settings.
+- Responsive static dashboard UI with overview, appointments, professionals, services, clients, public booking page placeholder and settings.
 - Demo data is fictitious and held in browser memory only.
 - Initial Google Apps Script pilot foundation and spreadsheet schema are in `apps-script/`.
 - Data model and server-side invariants are documented in `docs/DATA_MODEL.md`.
-- HTTP API intentionally remains disabled/fail-closed.
+- Product audit and recommended implementation sequence are documented in `docs/PRODUCT_AUDIT.md`.
+- HTTP API intentionally remains disabled/fail-closed; real authentication, booking and persistence are not connected.
 
 ## Pilot architecture decision
 Google Sheets + Google Apps Script is the selected pilot direction. The earlier Firebase prototype remains a reference/rollback option and is not silently substituted.
@@ -24,11 +25,16 @@ Google Sheets + Google Apps Script is the selected pilot direction. The earlier 
 - Do not enable booking endpoints before authentication, tenant authorization, locking, idempotency, validation and security tests are implemented.
 
 ## Development plan
-1. Complete the backend authentication and authorization design.
-2. Implement tenant-scoped repositories and validated booking operations.
-3. Add a frontend adapter with local mock as the default.
-4. Test concurrency, duplicate submissions, cross-tenant access, token expiry/revocation and input sanitization.
-5. Only then prepare a controlled pilot deployment.
+1. Make the demo frontend honest, secure and coherent, including availability/calendar behavior.
+2. Validate authentication in a real Apps Script runtime.
+3. Implement tenant-scoped repositories and validated booking operations.
+4. Add a frontend adapter with local mock as the default.
+5. Test concurrency, duplicate submissions, cross-tenant access, token expiry/revocation and input sanitization.
+6. Only then prepare a controlled pilot deployment.
 
 ## Online preview
-The preview site is deployed separately from all production websites at `https://alansm-booking-preview.pages.dev` when the Cloudflare Pages build completes. The preview contains fictitious browser-only data; no real bookings are processed.
+The current static preview is available at:
+
+https://preview.alansm-booking-preview.pages.dev
+
+It is deployed from the `preview` branch. The `main` branch remains the stable branch and production deployments are disabled. The preview contains fictitious browser-only data; no real bookings are processed.
