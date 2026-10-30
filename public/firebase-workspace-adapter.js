@@ -79,7 +79,7 @@
         }
         return result;
       },
-      async getCatalog({ tenantId } = {}) {
+      async getMembers({ tenantId } = {}) {\n        const id = await requireSelectedTenant(tenantId);\n        return invoke("getTenantMembers", { tenantId: id });\n      },\n      async inviteMember({ tenantId, email, role } = {}) {\n        const id = await requireSelectedTenant(tenantId);\n        const normalizedEmail = String(email || "").trim().toLowerCase();\n        if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) {\n          throw new Error("Informe um e-mail válido.");\n        }\n        if (!["admin", "staff"].includes(role)) throw new Error("Perfil de acesso inválido.");\n        return invoke("createMemberInvitation", { tenantId: id, email: normalizedEmail, role });\n      },\n      async updateMember({ tenantId, memberUid, role, status } = {}) {\n        const id = await requireSelectedTenant(tenantId);\n        const uid = String(memberUid || "").trim();\n        if (!uid) throw new Error("Membro inválido.");\n        if (!["admin", "staff"].includes(role) || !["active", "suspended"].includes(status)) {\n          throw new Error("Perfil ou estado de acesso inválido.");\n        }\n        return invoke("updateMemberAccess", { tenantId: id, memberUid: uid, role, status });\n      },\n      async getCatalog({ tenantId } = {}) {
         return invoke("getTenantCatalog", { tenantId: await requireSelectedTenant(tenantId) });
       },
       async getAgenda({ tenantId, startAtMs, endAtMs, professionalId = "" } = {}) {
