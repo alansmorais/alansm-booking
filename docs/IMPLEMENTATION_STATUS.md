@@ -56,5 +56,7 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Firebase Functions are compiled with Node.js 22.
 - Auth + callable Functions integration tests use only local Auth, Firestore and Functions emulators.
 - Integration coverage includes unauthenticated tenant creation, verified-user tenant creation, duplicate slug rejection and session membership retrieval.
+- The Firestore rules test project ID is aligned with the emulator project, and coverage also checks that a user cannot read another member's membership document.
+- Auth integration coverage also verifies that an account with an unverified email cannot create a tenant.
 - No production Firebase project, secrets, billing or live user data are used by these tests.
 - Workflow files and tests have been committed, but a successful GitHub Actions run has not yet been observed; do not mark CI green until the run is checked.
