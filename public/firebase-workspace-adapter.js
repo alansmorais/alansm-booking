@@ -40,6 +40,9 @@
       const requestedId = String(tenantId || "").trim();
       const session = await getSession();
       if (requestedId && requestedId !== selectedTenantId) {
+        if (selectedTenantId) {
+          throw new Error("A empresa selecionada mudou. Atualize o espaço de trabalho.");
+        }
         const allowed = session.tenants.some((item) => item.tenantId === requestedId);
         if (!allowed) throw new Error("Não tem acesso a esta empresa.");
         selectedTenantId = requestedId;
