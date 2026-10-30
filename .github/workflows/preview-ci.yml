@@ -78,3 +78,33 @@ jobs:
 
       - name: Compile TypeScript
         run: npm run test:functions:build
+
+  functions-emulator:
+    name: Firebase Auth and Functions integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install root test dependencies
+        run: npm install
+
+      - name: Install Functions dependencies
+        run: npm --prefix functions install
+
+      - name: Compile Functions
+        run: npm run test:functions:build
+
+      - name: Test Auth and callable Functions in local emulators
+        run: npx --yes firebase-tools@latest emulators:exec --project demo-alansm-booking --only auth,firestore,functions "npm run test:functions:integration"
