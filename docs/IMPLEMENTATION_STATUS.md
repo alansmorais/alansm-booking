@@ -72,3 +72,7 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Added company closure and professional absence date ranges, stored per local date in the tenant timezone; each request is limited to 90 days.
 - Added create/update/remove operations for professional-specific or company-wide time blocks.
 - All three endpoints require an active owner/admin membership, use tenant-scoped document paths, and create audit records. They are backend scaffolds only; emulator tests and frontend wiring remain outstanding.
+
+## Schedule administration integration coverage (2026-10-30)
+- Added emulator integration cases for valid weekly company hours, invalid overlapping periods, company closure date ranges, the 90-day limit, block creation/removal and invalid block time ranges.
+- These tests run only against the local Firebase Emulator Suite in GitHub Actions. Results must be observed before treating the endpoints as validated.
