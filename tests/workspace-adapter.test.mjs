@@ -34,3 +34,18 @@ test("workspace adapter refuses non-demo dependencies", () => {
     dataAdapter: { mode: "demo" }
   }), /adaptadores de demonstração/);
 });
+
+test("demo workspace exposes a validated selected tenant", () => {
+  const workspace = window.BookingWorkspace.createDemoWorkspaceAdapter({
+    authAdapter: { mode: "demo" },
+    dataAdapter: {
+      mode: "demo",
+      getCatalog: () => ({ professionals: [], services: [] }),
+      getAppointments: () => [],
+      getScheduleData: () => ({})
+    }
+  });
+  assert.equal(workspace.getSelectedTenant().id, "demo-tenant");
+  assert.equal(workspace.selectTenant("demo-tenant").name, "Barbearia Modelo");
+  assert.throws(() => workspace.selectTenant("tenant-of-another-user"), /Não tem acesso/);
+});
