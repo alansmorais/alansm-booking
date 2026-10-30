@@ -86,7 +86,7 @@
       async inviteMember({ tenantId, email, role } = {}) {
         const id = await requireSelectedTenant(tenantId);
         const normalizedEmail = String(email || "").trim().toLowerCase();
-        if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
           throw new Error("Informe um e-mail válido.");
         }
         if (!["admin", "staff"].includes(role)) throw new Error("Perfil de acesso inválido.");
