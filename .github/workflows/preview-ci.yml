@@ -38,6 +38,7 @@ jobs:
           node --check public/firebase-workspace-adapter.js
           node --check public/availability.js
           node --check public/data-adapter.js
+          node --check public/team.js
       - name: Test demo data adapter
         run: npm run test:adapter && npm run test:auth-adapter && npm run test:workspace-adapter && npm run test:onboarding && npm run test:firebase-adapters
 
