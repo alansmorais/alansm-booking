@@ -307,6 +307,10 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function validDocumentId(value: string): boolean {
+  return value.length > 0 && value.length <= 128 && !value.includes("/");
+}
+
 /**
  * Authenticated appointment creation.
  *
@@ -333,8 +337,10 @@ export const createAppointment = onCall(
     const notes = cleanText(input.notes, 500);
     const startAtMs = input.startAtMs;
 
-    if (!tenantId || !professionalId || !serviceId || !clientId ||
-        !idempotencyKey || !Number.isSafeInteger(startAtMs)) {
+    if (!validDocumentId(tenantId) || !validDocumentId(professionalId) ||
+        !validDocumentId(serviceId) || !validDocumentId(clientId) ||
+        idempotencyKey.length < 8 || idempotencyKey.length > 128 ||
+        !Number.isSafeInteger(startAtMs)) {
       throw new HttpsError("invalid-argument", "Dados obrigatórios da reserva inválidos.");
     }
 
