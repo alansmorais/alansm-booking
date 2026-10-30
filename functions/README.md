@@ -11,6 +11,17 @@ This directory contains the first trusted backend endpoints for AlanSM Booking.
 
 `createAppointment` is not ready for real bookings: working hours, breaks, leave, date exceptions, professional schedules and timezone-aware availability are not yet validated. Booking endpoints are not connected to the frontend and require emulator integration tests before use.
 
+## Schedule data contract for `createAppointment`
+
+Before this callable can be used, trusted setup code must create these tenant-scoped documents:
+
+- `scheduleSettings/company` and `scheduleSettings/professional_{professionalId}` with `{ days: { "0": [], "1": [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }] } }`. Day keys follow JavaScript weekday numbering: Sunday `0` through Saturday `6`.
+- `scheduleExceptions/{YYYY-MM-DD}` to mark a company closure.
+- `professionalExceptions/{professionalId}_{YYYY-MM-DD}` to mark a professional absence for that date. Multi-day absences must create one document per affected local date.
+- `blocks` documents with `{ date: "YYYY-MM-DD", start: "HH:MM", end: "HH:MM", professionalId?: "..." }`. Omit `professionalId` for a company-wide block.
+
+Dates and clock times are interpreted in the tenant's IANA timezone. The current callable rejects appointments crossing local midnight. These records must be written by trusted backend setup handlers, not by browser clients.
+
 ## Security notes
 - These functions use Firebase Admin SDK, which bypasses Firestore Security Rules. Every handler must validate identity, membership, role, tenant ownership and input independently.
 - The browser must never send a trusted tenant identity for authorization.
