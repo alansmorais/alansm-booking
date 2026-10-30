@@ -9,6 +9,33 @@
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
+  <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
+    <div class="auth-card">
+      <a class="brand auth-brand" href="#" aria-label="AlanSM Booking"><span class="brand-mark">A</span><span>AlanSM <b>Booking</b></span></a>
+      <div class="auth-kicker">GESTÃO SIMPLES PARA O SEU NEGÓCIO</div>
+      <h1 id="authTitle">Bem-vindo ao AlanSM Booking</h1>
+      <p class="auth-subtitle">Entre na sua conta ou prepare o espaço de trabalho da sua empresa.</p>
+      <div class="auth-tabs" role="tablist" aria-label="Acesso à plataforma">
+        <button type="button" class="auth-tab active" data-auth-tab="login">Entrar</button>
+        <button type="button" class="auth-tab" data-auth-tab="register">Criar conta</button>
+      </div>
+      <form id="authLoginForm" class="auth-form">
+        <label>E-mail<input name="email" type="email" autocomplete="email" placeholder="voce@empresa.com" required></label>
+        <label>Palavra-passe<input name="password" type="password" autocomplete="current-password" placeholder="A sua palavra-passe" required minlength="8"></label>
+        <button class="primary-btn auth-submit" type="submit">Entrar na minha conta</button>
+      </form>
+      <form id="authRegisterForm" class="auth-form" hidden>
+        <label>O seu nome<input name="displayName" autocomplete="name" maxlength="80" placeholder="Nome completo" required></label>
+        <label>E-mail<input name="email" type="email" autocomplete="email" placeholder="voce@empresa.com" required></label>
+        <label>Palavra-passe<input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="Mínimo de 8 caracteres" required></label>
+        <label>Nome da empresa<input name="businessName" maxlength="80" placeholder="Ex.: Barbearia Central" required></label>
+        <label>Endereço público pretendido<input name="slug" maxlength="40" placeholder="barbearia-central" required></label>
+        <button class="primary-btn auth-submit" type="submit">Preparar a minha conta</button>
+      </form>
+      <div class="auth-notice"><strong>Autenticação Firebase em preparação</strong><span>O registo e o login ainda não estão ligados a um serviço real. Não introduza palavras-passe verdadeiras nesta demonstração.</span></div>
+      <button type="button" class="auth-demo" id="enterDemo">Continuar na demonstração local <span>→</span></button>
+    </div>
+  </section>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <a class="brand" href="#" aria-label="AlanSM Booking início">
@@ -51,6 +78,6 @@
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="./availability.js"></script>
-  <script src="./app.js"></script>
+  <script src="./app.js"></script>\n  <script src="./auth.js"></script>
 </body>
 </html>
