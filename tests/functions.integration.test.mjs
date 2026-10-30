@@ -2,6 +2,8 @@ import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
+import { createHash } from "node:crypto";
 
 const PROJECT = "demo-alansm-booking";
 const AUTH = "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1";
@@ -10,6 +12,7 @@ let idToken;
 let email;
 let tenantId;
 let adminAuth;
+let adminDb;
 
 async function jsonRequest(url, body, headers = {}) {
   const response = await fetch(url, {
@@ -30,6 +33,7 @@ before(async () => {
   const adminApp = initializeApp({ projectId: PROJECT }, "booking-integration-tests");
   const auth = getAuth(adminApp);
   adminAuth = auth;
+  adminDb = getFirestore(adminApp);
   const user = await auth.createUser({
     email,
     password: "Test-password-123!",
@@ -222,6 +226,39 @@ test("owner can invite a verified user and the invited user can accept once", as
 
   const replay = await callable("acceptMemberInvitation", { tenantId, token }, signedIn.data.idToken);
   assert.notEqual(replay.data.result?.ok, true);
+});
+
+
+
+test("invitation acceptance rejects wrong email, unverified users and expired tokens", async () => {
+  const inviteEmail = `edge-${Date.now()}@example.test`;
+  const created = await callable("createMemberInvitation", { tenantId, email: inviteEmail, role: "staff" });
+  assert.equal(created.data.result?.ok, true, JSON.stringify(created.data));
+  const token = created.data.result.invitationToken;
+
+  const wrongUser = await adminAuth.createUser({
+    email: `wrong-${Date.now()}@example.test`, password: "Test-password-123!", emailVerified: true
+  });
+  const wrongCustomToken = await adminAuth.createCustomToken(wrongUser.uid);
+  const wrongSignin = await jsonRequest(`${AUTH}/accounts:signInWithCustomToken?key=fake-api-key`, {
+    token: wrongCustomToken, returnSecureToken: true
+  });
+  assert.equal(wrongSignin.status, 200, JSON.stringify(wrongSignin.data));
+  const wrongEmail = await callable("acceptMemberInvitation", { tenantId, token }, wrongSignin.data.idToken);
+  assert.equal(wrongEmail.data.error?.status, "FAILED_PRECONDITION", JSON.stringify(wrongEmail.data));
+
+  const unverified = await jsonRequest(`${AUTH}/accounts:signUp?key=fake-api-key`, {
+    email: inviteEmail, password: "Test-password-123!", returnSecureToken: true
+  });
+  assert.equal(unverified.status, 200, JSON.stringify(unverified.data));
+  const unverifiedResult = await callable("acceptMemberInvitation", { tenantId, token }, unverified.data.idToken);
+  assert.equal(unverifiedResult.data.error?.status, "FAILED_PRECONDITION", JSON.stringify(unverifiedResult.data));
+
+  await adminDb.doc(`tenants/${tenantId}/invitations/${createHash("sha256").update(token).digest("hex")}`).update({
+    expiresAt: new Date(Date.now() - 1000)
+  });
+  const expired = await callable("acceptMemberInvitation", { tenantId, token }, wrongSignin.data.idToken);
+  assert.equal(expired.data.error?.status, "FAILED_PRECONDITION", JSON.stringify(expired.data));
 });
 
 test("tenant managers can list members without exposing invitation tokens", async () => {
