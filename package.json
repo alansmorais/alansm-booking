@@ -8,7 +8,8 @@
     "test:functions:integration": "node --test tests/functions.integration.test.mjs",
     "test:adapter": "node --test tests/data-adapter.test.mjs",
     "test:auth-adapter": "node --test tests/auth-adapter.test.mjs",
-    "test:workspace-adapter": "node --test tests/workspace-adapter.test.mjs"
+    "test:workspace-adapter": "node --test tests/workspace-adapter.test.mjs",
+    "test:onboarding": "node --test tests/onboarding-flow.test.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",
