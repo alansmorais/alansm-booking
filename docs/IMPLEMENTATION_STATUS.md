@@ -158,3 +158,10 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - The adapter normalizes invitation e-mail addresses and validates allowed roles/statuses before making calls. It does not expose member-management operations through the demo adapter.
 - Added mocked tests for tenant scoping, e-mail normalization and rejection of invalid roles/statuses before any mutation call.
 - These methods are not instantiated by the demo app. No invitation token is generated and no live Firebase call is made in the preview.
+
+
+## Firebase invitation acceptance adapter (2026-10-30)
+- Added a dormant frontend adapter method for accepting a tenant invitation using the tenant locator and one-time invitation token.
+- Acceptance does not require existing tenant membership; it does require a signed-in user with a verified email before the callable Function is invoked.
+- The backend remains authoritative: it checks the token hash, invited email, expiry, pending status and tenant availability transactionally, then creates membership and audit records.
+- Mocked tests cover successful invocation, missing authentication, unverified email and invalid tokens. No real invitation token or Firebase account is used, and the demo application remains unchanged.
