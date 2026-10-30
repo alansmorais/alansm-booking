@@ -83,3 +83,10 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Both require authenticated active owner/admin/staff membership. Tenant IDs are locators only, not authorization.
 - Agenda response omits free-text notes and client contact data, caps results at 500 and reports truncation.
 - Emulator integration coverage checks safe catalog shape, cross-tenant denial and date-window validation. These APIs remain disconnected from the demo frontend and no live Firebase project is configured.
+
+## Frontend data adapter — schedule coverage (2026-10-30)
+- Extended the demo adapter with detached read snapshots for company hours, professional hours, breaks, time blocks, company exceptions and professional absence ranges.
+- Weekly calendar and appointment availability calculations now read their schedule inputs through the adapter. Schedule editing still writes only to the local demo state.
+- Added automated adapter tests confirming returned schedule data is detached from the original demo state and invalid demo state is rejected.
+- GitHub Actions runs the adapter tests alongside frontend syntax checks and Firebase emulator/build tests.
+- This remains a browser-local demo adapter. No Firebase client, network API or live data has been connected.
