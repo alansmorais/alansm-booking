@@ -57,3 +57,33 @@ test("Firebase workspace rejects invalid agenda interval and missing tenant", as
   await assert.rejects(adapter.getCatalog({}), /Selecione uma empresa/);
   await assert.rejects(adapter.getAgenda({ tenantId: "tenant-1", startAtMs: 5, endAtMs: 5 }), /intervalo válido/);
 });
+
+test("multiple tenants require explicit selection and reject memberships outside session", async () => {
+  const calls = [];
+  const tenants = [
+    { tenantId: "tenant-a", name: "Empresa A" },
+    { tenantId: "tenant-b", name: "Empresa B" }
+  ];
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async (payload) => {
+        calls.push({ name, payload });
+        if (name === "getSession") return { data: { tenants } };
+        return { data: { ok: true } };
+      };
+    }
+  });
+  await adapter.getSession();
+  assert.equal(adapter.getSelectedTenantId(), null);
+  await assert.rejects(adapter.getCatalog(), /Selecione uma empresa/);
+  await assert.rejects(adapter.getCatalog({ tenantId: "tenant-outsider" }), /Não tem acesso/);
+  await adapter.selectTenant("tenant-b");
+  assert.equal(adapter.getSelectedTenantId(), "tenant-b");
+  await adapter.getCatalog();
+  assert.equal(calls.at(-1).payload.tenantId, "tenant-b");
+  await assert.rejects(adapter.getAgenda({
+    tenantId: "tenant-a", startAtMs: 1000, endAtMs: 2000
+  }), /A empresa selecionada mudou/);
+});
