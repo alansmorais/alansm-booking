@@ -36,3 +36,5 @@
 .auth-demo{display:flex;justify-content:center;gap:8px;width:100%;border:0;background:transparent;color:#5368cf;font:600 11px 'DM Sans';padding:18px 0 0;cursor:pointer}
 .auth-demo:hover{text-decoration:underline}
 @media(max-width:520px){.auth-card{padding:25px 20px}.auth-card h1{font-size:22px}}
+
+.workspace-details{min-width:0;flex:1}.workspace-details strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.workspace select{width:28px;min-width:28px;padding:5px 0;border:0;border-radius:5px;background:#293653;color:#e7ebf4;font:10px 'DM Sans';cursor:pointer}.workspace select:focus{outline:2px solid #7890ff;outline-offset:2px}.workspace select option{background:#1c2638;color:#fff}
