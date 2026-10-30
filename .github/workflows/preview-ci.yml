@@ -33,6 +33,8 @@ jobs:
           node --check public/auth.js
           node --check public/availability.js
           node --check public/data-adapter.js
+      - name: Test demo data adapter
+        run: npm run test:adapter
 
       - name: Validate JSON configuration
         run: |
