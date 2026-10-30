@@ -705,3 +705,57 @@ export const saveScheduleException = onCall(
     return { ok: true, datesSaved: count };
   }
 );
+
+type ScheduleBlockInput = { tenantId?: unknown; blockId?: unknown; date?: unknown; start?: unknown; end?: unknown; professionalId?: unknown; reason?: unknown; remove?: unknown };
+
+/** Owner/admin-only create, update or remove a time block. */
+export const saveScheduleBlock = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 10 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as ScheduleBlockInput;
+    const tenantId = cleanText(input.tenantId, 128);
+    const blockId = cleanText(input.blockId, 128);
+    const date = input.date;
+    const professionalId = cleanText(input.professionalId, 128);
+    if (!validDocumentId(tenantId) || !isLocalDate(date)) {
+      throw new HttpsError("invalid-argument", "Empresa ou data inválida.");
+    }
+    await requireScheduleAdmin(auth.uid, tenantId);
+    if (input.remove === true) {
+      if (!validDocumentId(blockId)) throw new HttpsError("invalid-argument", "Identificador do bloqueio inválido.");
+      const ref = db.doc(`tenants/${tenantId}/blocks/${blockId}`);
+      const audit = db.collection(`tenants/${tenantId}/auditLog`).doc();
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) throw new HttpsError("not-found", "Bloqueio não encontrado.");
+        tx.delete(ref);
+        tx.create(audit, { tenantId, actorUid: auth.uid, action: "schedule.block_removed",
+          resourceType: "scheduleBlock", resourceId: blockId, createdAt: FieldValue.serverTimestamp() });
+      });
+      return { ok: true, blockId, removed: true };
+    }
+    const startMinute = clockMinutes(input.start), endMinute = clockMinutes(input.end);
+    if (!validDocumentId(blockId || "new") || startMinute === null || endMinute === null || startMinute >= endMinute) {
+      throw new HttpsError("invalid-argument", "Horário do bloqueio inválido.");
+    }
+    if (professionalId &&
+        !(await db.doc(`tenants/${tenantId}/professionals/${professionalId}`).get()).exists) {
+      throw new HttpsError("not-found", "Profissional não encontrado.");
+    }
+    const ref = blockId ? db.doc(`tenants/${tenantId}/blocks/${blockId}`) :
+      db.collection(`tenants/${tenantId}/blocks`).doc();
+    const audit = db.collection(`tenants/${tenantId}/auditLog`).doc();
+    const now = FieldValue.serverTimestamp();
+    await db.runTransaction(async (tx) => {
+      if (blockId && !(await tx.get(ref)).exists) throw new HttpsError("not-found", "Bloqueio não encontrado.");
+      tx.set(ref, { tenantId, date, start: input.start, end: input.end,
+        professionalId: professionalId || null, reason: cleanText(input.reason, 240),
+        updatedAt: now, updatedBy: auth.uid, createdAt: now }, { merge: true });
+      tx.create(audit, { tenantId, actorUid: auth.uid,
+        action: blockId ? "schedule.block_updated" : "schedule.block_created",
+        resourceType: "scheduleBlock", resourceId: ref.id, createdAt: now });
+    });
+    return { ok: true, blockId: ref.id, removed: false };
+  }
+);
