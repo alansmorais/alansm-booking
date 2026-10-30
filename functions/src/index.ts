@@ -194,3 +194,94 @@ export const getSession = onCall(
     };
   }
 );
+
+
+type CancelAppointmentInput = {
+  tenantId?: unknown;
+  appointmentId?: unknown;
+  reason?: unknown;
+};
+
+/**
+ * Owner/admin cancellation scaffold.
+ * Tenant access is established from the caller's active membership; the
+ * submitted tenantId is only a resource locator, never proof of authorization.
+ * Appointment state and its audit event are updated atomically.
+ */
+export const cancelAppointment = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 20 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as CancelAppointmentInput;
+    const tenantId = cleanText(input.tenantId, 128);
+    const appointmentId = cleanText(input.appointmentId, 128);
+    const reason = cleanText(input.reason, 240);
+
+    if (!tenantId || !appointmentId) {
+      throw new HttpsError("invalid-argument", "Empresa e reserva são obrigatórias.");
+    }
+
+    const user = await getAuth().getUser(auth.uid);
+    if (user.disabled) {
+      throw new HttpsError("permission-denied", "Esta conta está desativada.");
+    }
+
+    const memberRef = db.doc(`tenants/${tenantId}/members/${auth.uid}`);
+    const tenantRef = db.doc(`tenants/${tenantId}`);
+    const appointmentRef = db.doc(`tenants/${tenantId}/appointments/${appointmentId}`);
+    const auditRef = db.collection(`tenants/${tenantId}/auditLog`).doc();
+
+    return db.runTransaction(async (tx) => {
+      const [memberSnap, tenantSnap, appointmentSnap] = await Promise.all([
+        tx.get(memberRef),
+        tx.get(tenantRef),
+        tx.get(appointmentRef)
+      ]);
+
+      if (!memberSnap.exists || memberSnap.data()?.status !== "active" ||
+          !tenantSnap.exists || tenantSnap.data()?.status !== "active") {
+        throw new HttpsError("permission-denied", "Não tem acesso a esta empresa.");
+      }
+
+      const role = cleanText(memberSnap.data()?.role, 20);
+      if (!["owner", "admin"].includes(role)) {
+        throw new HttpsError("permission-denied", "Apenas proprietários e administradores podem cancelar reservas.");
+      }
+      if (!appointmentSnap.exists) {
+        throw new HttpsError("not-found", "Reserva não encontrada.");
+      }
+
+      const appointment = appointmentSnap.data()!;
+      if (appointment.tenantId !== tenantId) {
+        throw new HttpsError("permission-denied", "Reserva inválida para esta empresa.");
+      }
+
+      if (appointment.status === "cancelled" || appointment.status === "Cancelado") {
+        return { ok: true, appointmentId, status: "cancelled", alreadyCancelled: true };
+      }
+      if (!["booked", "confirmed", "pending"].includes(appointment.status)) {
+        throw new HttpsError("failed-precondition", "Esta reserva não pode ser cancelada neste estado.");
+      }
+
+      const now = FieldValue.serverTimestamp();
+      tx.update(appointmentRef, {
+        status: "cancelled",
+        cancelledAt: now,
+        cancelledBy: auth.uid,
+        cancellationReason: reason,
+        updatedAt: now
+      });
+      tx.create(auditRef, {
+        tenantId,
+        actorUid: auth.uid,
+        action: "appointment.cancelled",
+        resourceType: "appointment",
+        resourceId: appointmentId,
+        reason,
+        createdAt: now
+      });
+
+      return { ok: true, appointmentId, status: "cancelled", alreadyCancelled: false };
+    });
+  }
+);
