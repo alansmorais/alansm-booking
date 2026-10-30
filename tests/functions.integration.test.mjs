@@ -33,7 +33,7 @@ before(async () => {
     idToken, emailVerified: true, returnSecureToken: true
   });
   assert.equal(verified.status, 200, JSON.stringify(verified.data));
-  idToken = verified.data.idToken;
+  idToken = verified.data.idToken || idToken;
 });
 
 test("createTenant rejects unauthenticated calls", async () => {
