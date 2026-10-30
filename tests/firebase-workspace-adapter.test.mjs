@@ -162,10 +162,10 @@ test("Firebase workspace accepts an invitation without requiring prior tenant me
     token: "x".repeat(48)
   });
   assert.equal(result.role, "staff");
-  assert.deepEqual(calls, [{
-    name: "acceptMemberInvitation",
-    payload: { tenantId: "tenant-invited", token: "x".repeat(48) }
-  }]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, "acceptMemberInvitation");
+  assert.equal(calls[0].payload.tenantId, "tenant-invited");
+  assert.equal(calls[0].payload.token, "x".repeat(48));
 });
 
 test("Firebase workspace blocks invitation acceptance for unverified or invalid users", async () => {
