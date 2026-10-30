@@ -254,10 +254,15 @@ test("invitation acceptance rejects wrong email, unverified users and expired to
   const unverifiedResult = await callable("acceptMemberInvitation", { tenantId, token }, unverified.data.idToken);
   assert.equal(unverifiedResult.data.error?.status, "FAILED_PRECONDITION", JSON.stringify(unverifiedResult.data));
 
-  await adminDb.doc(`tenants/${tenantId}/invitations/${createHash("sha256").update(token).digest("hex")}`).update({
+  const expiryInvite = await callable("createMemberInvitation", {
+    tenantId, email: wrongUser.email, role: "staff"
+  });
+  assert.equal(expiryInvite.data.result?.ok, true, JSON.stringify(expiryInvite.data));
+  const expiryToken = expiryInvite.data.result.invitationToken;
+  await adminDb.doc(`tenants/${tenantId}/invitations/${createHash("sha256").update(expiryToken).digest("hex")}`).update({
     expiresAt: new Date(Date.now() - 1000)
   });
-  const expired = await callable("acceptMemberInvitation", { tenantId, token }, wrongSignin.data.idToken);
+  const expired = await callable("acceptMemberInvitation", { tenantId, token: expiryToken }, wrongSignin.data.idToken);
   assert.equal(expired.data.error?.status, "FAILED_PRECONDITION", JSON.stringify(expired.data));
 });
 
