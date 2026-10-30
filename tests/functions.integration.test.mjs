@@ -33,7 +33,11 @@ before(async () => {
     idToken, emailVerified: true, returnSecureToken: true
   });
   assert.equal(verified.status, 200, JSON.stringify(verified.data));
-  idToken = verified.data.idToken || idToken;
+  const signin = await jsonRequest(`${AUTH}/accounts:signInWithPassword?key=fake-api-key`, {
+    email, password: "Test-password-123!", returnSecureToken: true
+  });
+  assert.equal(signin.status, 200, JSON.stringify(signin.data));
+  idToken = signin.data.idToken;
 });
 
 test("createTenant rejects unauthenticated calls", async () => {
