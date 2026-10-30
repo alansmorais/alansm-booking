@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
@@ -282,6 +283,199 @@ export const cancelAppointment = onCall(
       });
 
       return { ok: true, appointmentId, status: "cancelled", alreadyCancelled: false };
+    });
+  }
+);
+
+
+type CreateAppointmentInput = {
+  tenantId?: unknown;
+  professionalId?: unknown;
+  serviceId?: unknown;
+  clientId?: unknown;
+  startAtMs?: unknown;
+  idempotencyKey?: unknown;
+  notes?: unknown;
+};
+
+const SLOT_MINUTES = 5;
+const MAX_SERVICE_MINUTES = 8 * 60;
+const MAX_BOOKING_DAYS_AHEAD = 180;
+const ACTIVE_APPOINTMENT_STATUSES = new Set(["pending", "booked", "confirmed"]);
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+/**
+ * Authenticated appointment creation.
+ *
+ * A per-professional/per-UTC-day guard document serializes booking transactions.
+ * Each transaction reads all guard documents for the interval before querying
+ * existing appointments and writing. This avoids relying on a range query alone
+ * as a concurrency lock. Appointments may span UTC midnight, so both day guards
+ * are included. Duration/price come from the service document, never the client.
+ *
+ * Business opening hours, breaks, leave and date exceptions are deliberately
+ * not inferred here; they must be added to this transaction before enabling
+ * real bookings.
+ */
+export const createAppointment = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 30 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as CreateAppointmentInput;
+    const tenantId = cleanText(input.tenantId, 128);
+    const professionalId = cleanText(input.professionalId, 128);
+    const serviceId = cleanText(input.serviceId, 128);
+    const clientId = cleanText(input.clientId, 128);
+    const idempotencyKey = cleanText(input.idempotencyKey, 128);
+    const notes = cleanText(input.notes, 500);
+    const startAtMs = input.startAtMs;
+
+    if (!tenantId || !professionalId || !serviceId || !clientId ||
+        !idempotencyKey || !Number.isSafeInteger(startAtMs)) {
+      throw new HttpsError("invalid-argument", "Dados obrigatórios da reserva inválidos.");
+    }
+
+    const startMs = startAtMs as number;
+    const nowMs = Date.now();
+    const slotMs = SLOT_MINUTES * 60_000;
+    if (startMs % slotMs !== 0 || startMs <= nowMs ||
+        startMs > nowMs + MAX_BOOKING_DAYS_AHEAD * 86_400_000) {
+      throw new HttpsError("invalid-argument", "Escolha um horário futuro válido, em intervalos de cinco minutos.");
+    }
+
+    const user = await getAuth().getUser(auth.uid);
+    if (user.disabled) {
+      throw new HttpsError("permission-denied", "Esta conta está desativada.");
+    }
+
+    const tenantRef = db.doc(`tenants/${tenantId}`);
+    const memberRef = db.doc(`tenants/${tenantId}/members/${auth.uid}`);
+    const serviceRef = db.doc(`tenants/${tenantId}/services/${serviceId}`);
+    const professionalRef = db.doc(`tenants/${tenantId}/professionals/${professionalId}`);
+    const clientRef = db.doc(`tenants/${tenantId}/clients/${clientId}`);
+    const requestHash = sha256(JSON.stringify({
+      tenantId, professionalId, serviceId, clientId, startMs, notes
+    }));
+    const idempotencyRef = db.doc(`tenants/${tenantId}/idempotencyKeys/${sha256(idempotencyKey)}`);
+    const appointmentRef = db.collection(`tenants/${tenantId}/appointments`).doc();
+    const auditRef = db.collection(`tenants/${tenantId}/auditLog`).doc();
+
+    return db.runTransaction(async (tx) => {
+      const [tenantSnap, memberSnap, serviceSnap, professionalSnap, clientSnap, idemSnap] =
+        await Promise.all([
+          tx.get(tenantRef), tx.get(memberRef), tx.get(serviceRef),
+          tx.get(professionalRef), tx.get(clientRef), tx.get(idempotencyRef)
+        ]);
+
+      if (!tenantSnap.exists || tenantSnap.data()?.status !== "active" ||
+          !memberSnap.exists || memberSnap.data()?.status !== "active") {
+        throw new HttpsError("permission-denied", "Não tem acesso a esta empresa.");
+      }
+      const role = cleanText(memberSnap.data()?.role, 20);
+      if (!["owner", "admin", "staff"].includes(role)) {
+        throw new HttpsError("permission-denied", "Não tem permissão para criar reservas.");
+      }
+      if (!serviceSnap.exists || serviceSnap.data()?.status !== "active" ||
+          !professionalSnap.exists || professionalSnap.data()?.status !== "active" ||
+          !clientSnap.exists) {
+        throw new HttpsError("failed-precondition", "Profissional, serviço ou cliente indisponível.");
+      }
+
+      if (idemSnap.exists) {
+        const saved = idemSnap.data()!;
+        if (saved.requestHash !== requestHash) {
+          throw new HttpsError("already-exists", "Esta chave de operação já foi utilizada com outros dados.");
+        }
+        return { ok: true, appointmentId: saved.appointmentId, replayed: true };
+      }
+
+      const service = serviceSnap.data()!;
+      const duration = service.durationMinutes;
+      const priceMinor = service.priceMinor;
+      const currency = cleanText(service.currency, 3);
+      if (!Number.isInteger(duration) || duration < SLOT_MINUTES ||
+          duration > MAX_SERVICE_MINUTES || duration % SLOT_MINUTES !== 0 ||
+          !Number.isSafeInteger(priceMinor) || priceMinor < 0 || !/^[A-Z]{3}$/.test(currency)) {
+        throw new HttpsError("failed-precondition", "O serviço tem duração ou preço inválido.");
+      }
+
+      const endMs = startMs + duration * 60_000;
+      const startAt = new Date(startMs);
+      const endAt = new Date(endMs);
+      const dayMs = 86_400_000;
+      const firstDay = Math.floor(startMs / dayMs);
+      const lastDay = Math.floor((endMs - 1) / dayMs);
+      const guardRefs = [];
+      for (let day = firstDay; day <= lastDay; day++) {
+        guardRefs.push(db.doc(`tenants/${tenantId}/bookingGuards/${sha256(professionalId).slice(0, 24)}_${day}`));
+      }
+
+      const guardSnaps = await Promise.all(guardRefs.map((ref) => tx.get(ref)));
+      const searchStart = new Date(startMs - MAX_SERVICE_MINUTES * 60_000);
+      const searchEnd = new Date(endMs);
+      const existingQuery = db.collection(`tenants/${tenantId}/appointments`)
+        .where("professionalId", "==", professionalId)
+        .where("startAt", ">=", searchStart)
+        .where("startAt", "<", searchEnd);
+      const existing = await tx.get(existingQuery);
+
+      const conflict = existing.docs.some((doc) => {
+        const appointment = doc.data();
+        if (!ACTIVE_APPOINTMENT_STATUSES.has(appointment.status)) return false;
+        const existingStart = appointment.startAt?.toMillis?.();
+        const existingEnd = appointment.endAt?.toMillis?.();
+        return Number.isFinite(existingStart) && Number.isFinite(existingEnd) &&
+          existingStart < endMs && startMs < existingEnd;
+      });
+      if (conflict) {
+        throw new HttpsError("already-exists", "Este horário acabou de ser reservado. Escolha outro horário.");
+      }
+
+      const now = FieldValue.serverTimestamp();
+      guardRefs.forEach((ref, index) => {
+        const current = guardSnaps[index].data()?.revision;
+        tx.set(ref, {
+          professionalId,
+          utcDay: firstDay + index,
+          revision: Number.isSafeInteger(current) ? current + 1 : 1,
+          updatedAt: now
+        }, { merge: true });
+      });
+
+      tx.create(appointmentRef, {
+        tenantId,
+        professionalId,
+        serviceId,
+        clientId,
+        startAt,
+        endAt,
+        status: "booked",
+        priceMinor,
+        currency,
+        notes,
+        idempotencyKeyHash: sha256(idempotencyKey),
+        createdBy: auth.uid,
+        createdAt: now,
+        updatedAt: now
+      });
+      tx.create(idempotencyRef, {
+        requestHash,
+        appointmentId: appointmentRef.id,
+        createdAt: now
+      });
+      tx.create(auditRef, {
+        tenantId,
+        actorUid: auth.uid,
+        action: "appointment.created",
+        resourceType: "appointment",
+        resourceId: appointmentRef.id,
+        createdAt: now
+      });
+
+      return { ok: true, appointmentId: appointmentRef.id, replayed: false };
     });
   }
 );
