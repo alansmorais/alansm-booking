@@ -40,3 +40,11 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Work only on `preview`; do not merge to `main`.
 - Do not create/connect a Firebase project, enable billing, deploy functions, set secrets, connect real users or configure production domains without explicit approval.
 - Never claim authentication, persistence, bookings or billing are live until end-to-end tests prove them.
+
+## Authentication / onboarding UI scaffold (2026-10-30)
+- Added a sign-in and create-account screen to the static preview.
+- The forms are explicitly non-functional placeholders and do not send or persist credentials.
+- A clear warning instructs users not to enter real passwords.
+- A separate action enters the existing local demo dashboard.
+- Firebase callable Functions `createTenant` and `getSession` exist as source scaffolding, but are not compiled, emulator-tested or deployed.
+- Do not describe login, registration or tenant creation as live.
