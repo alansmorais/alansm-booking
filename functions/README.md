@@ -5,11 +5,14 @@ This directory contains the first trusted backend endpoints for AlanSM Booking.
 ## Implemented
 - `createTenant`: authenticated and email-verified user creates a tenant; slug reservation and owner membership are written in one Firestore transaction.
 - `getSession`: returns the authenticated user's active tenant memberships and safe tenant summaries.
-- `cancelAppointment`: owner/admin-only cancellation scaffold; validates active membership and tenant state, applies an allowed status transition and writes the audit event in the same Firestore transaction.
+- `cancelAppointment`: owner/admin-only cancellation; validates active membership and tenant state, applies an allowed status transition and writes the audit event in the same Firestore transaction.
+- `saveScheduleSettings`: owner/admin-only company or professional weekly schedule updates, with validation of up to two daily periods and bounded breaks.
+- `saveScheduleException`: owner/admin-only company closures and professional absences, expanded into tenant-local date records (maximum 90 days per operation).
+- `saveScheduleBlock`: owner/admin-only create, update and removal of company-wide or professional-specific time blocks.
 
 `createAppointment`: authenticated booking creation; reads duration and price from the service record, checks active membership and referenced records, serializes booking attempts with per-professional/per-UTC-day transaction guards, checks overlapping appointments, and stores an idempotency record plus audit event atomically.
 
-`createAppointment` is not ready for real bookings: working hours, breaks, leave, date exceptions, professional schedules and timezone-aware availability are not yet validated. Booking endpoints are not connected to the frontend and require emulator integration tests before use.
+`createAppointment` now checks company/professional schedules, breaks, company closures, professional absences and date-specific blocks using the tenant timezone. The schedule administration callables are not connected to the frontend. Booking endpoints are not ready for real bookings and require emulator integration tests before use.
 
 ## Schedule data contract for `createAppointment`
 
