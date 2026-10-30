@@ -1,0 +1,13 @@
+{
+  "name": "alansm-booking",
+  "private": true,
+  "scripts": {
+    "test:rules": "node --test tests/firestore.rules.test.mjs",
+    "test:functions:build": "npm --prefix functions run build",
+    "test": "npm run test:rules && npm run test:functions:build"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.0.0"
+  }
+}
