@@ -69,7 +69,7 @@ Store timestamps as Firestore Timestamps in UTC and retain the tenant's IANA tim
 11. Apply App Check, rate limits, abuse controls, input bounds, safe output encoding and retention/deletion policies before launch.
 12. Test cross-tenant reads/writes, disabled members, role escalation, overlapping simultaneous requests, duplicate retries and public-page data leakage.
 
-## API contract (initial)
+## Implemented backend scaffold (preview branch)\n\nThe Functions source now contains two callable endpoints in `functions/src/index.ts`:\n\n- `createTenant`: requires an authenticated, email-verified, non-disabled Firebase user; validates tenant name, normalized slug, IANA timezone and currency; atomically reserves the slug and creates the tenant plus the caller's `owner` membership.\n- `getSession`: returns the caller's own identity and active memberships, with safe tenant summaries.\n\n`firebase.json` points to the `functions/` source using Node.js 20. A collection-group index supports the membership lookup. These endpoints are source-code scaffolding only: they have not been compiled against installed dependencies, run in the Emulator Suite, or deployed. App Check is not enforced yet.\n\n## API contract (initial)
 
 Authenticated:
 - `POST /v1/tenants` — create tenant + owner membership in one trusted operation.
@@ -85,7 +85,7 @@ Public:
 - `GET /v1/public/{slug}/availability` — return available slots only.
 - `POST /v1/public/{slug}/appointments` — validate public booking, abuse controls and idempotency.
 
-These are design routes, not implemented endpoints. The current UI must remain in demo mode until end-to-end implementation and tests exist.
+The two callable functions above are implemented as source scaffolding; the remaining routes are design-only and not implemented. The current UI must remain in demo mode until end-to-end implementation and tests exist.
 
 ## Local/demo persistence
 
@@ -97,4 +97,4 @@ The versioned browser localStorage adapter is demo-only. It must not become a fa
 - Existing Apps Script schema/auth work is retained for reference only; do not deploy it.
 - The Firebase prototype mentioned in project history was not present in the current `preview` tree at the time of this decision. No credentials/configuration were found or copied.
 - No Firebase project, Authentication provider, Firestore database, billing plan, secrets, domain or production resource has been created/changed.
-- Next: implement a typed/validated API adapter contract and server handler skeleton; then emulator-based rules and backend tests. Only connect a Firebase project after explicit approval.
+- Next: compile the Functions package, add Emulator Suite tests for onboarding and tenant isolation, then implement role-checked workspace/service/professional APIs and transactional booking operations. Only connect a Firebase project after explicit approval.
