@@ -90,3 +90,11 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Added automated adapter tests confirming returned schedule data is detached from the original demo state and invalid demo state is rejected.
 - GitHub Actions runs the adapter tests alongside frontend syntax checks and Firebase emulator/build tests.
 - This remains a browser-local demo adapter. No Firebase client, network API or live data has been connected.
+
+## Authentication adapter boundary (2026-10-30)
+- Added `public/auth-adapter.js` with an explicit demo-only authentication adapter.
+- Login and registration UI now call the adapter contract. In demo mode both operations fail closed with a clear message; no credentials are sent, persisted or logged.
+- The adapter exposes the future interface (`signIn`, `register`, `signOut`, `getCurrentUser`) but does not import Firebase, contain Firebase configuration or create a live session.
+- Added automated tests proving login/registration remain unavailable and the adapter reports no authenticated user.
+- CI checks the new file's syntax and runs both data/auth adapter tests.
+- A Firebase-backed implementation remains a separate future step and requires an approved dedicated Firebase test project before connecting credentials or real authentication.
