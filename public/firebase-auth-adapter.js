@@ -3,9 +3,10 @@
 
   function createFirebaseAuthAdapter({ auth, createUserWithEmailAndPassword,
     signInWithEmailAndPassword, signOut, updateProfile, sendEmailVerification, reload }) {
-    const required = [auth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-      signOut, updateProfile, sendEmailVerification, reload];
-    if (required.some((item) => typeof item !== "function" && item == null)) {
+    if (!auth || typeof createUserWithEmailAndPassword !== "function" ||
+        typeof signInWithEmailAndPassword !== "function" ||
+        typeof signOut !== "function" || typeof updateProfile !== "function" ||
+        typeof sendEmailVerification !== "function" || typeof reload !== "function") {
       throw new TypeError("Firebase Auth SDK incompleto.");
     }
 
