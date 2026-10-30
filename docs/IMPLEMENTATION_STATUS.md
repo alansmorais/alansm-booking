@@ -189,3 +189,8 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - The team route invokes the module mount hook, which is a no-op in demo mode and loads members only after live mode has been explicitly configured.
 - The raw invitation token is not persisted; if a live adapter returns one, the UI displays it once for manual private sharing. No email provider is configured.
 - The frontend wiring is still dormant. No Firebase SDK initialization, live credentials, customer data, Functions deployment or App Check configuration has been added. Do not treat this as an activated production team workflow.
+
+## Team screen contract tests (2026-10-30)
+- Added automated tests for the team screen's safe default (local demo), refusal to enable live mode without an explicitly marked Firebase adapter and tenant ID, and explicit live-mode member/invitation loading.
+- Added the team contract test to the preview CI workflow.
+- These tests use mocked adapters only; they do not initialize Firebase, authenticate users or contact a live backend.
