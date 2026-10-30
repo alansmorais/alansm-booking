@@ -919,11 +919,19 @@ export const createMemberInvitation = onCall(
     const tokenHash = sha256(token);
     const invitationRef = db.doc(`tenants/${tenantId}/invitations/${tokenHash}`);
     const now = Date.now();
-    await invitationRef.create({
-      tenantId, email, role, status: "pending",
-      invitedBy: auth.uid,
-      expiresAt: new Date(now + 7 * 86400000),
-      createdAt: FieldValue.serverTimestamp()
+    const pendingInvitations = db.collection(`tenants/${tenantId}/invitations`)
+      .where("status", "==", "pending").limit(100);
+    await db.runTransaction(async (tx) => {
+      const pending = await tx.get(pendingInvitations);
+      if (pending.docs.some((doc) => cleanText(doc.data().email, 254).toLowerCase() === email)) {
+        throw new HttpsError("already-exists", "Já existe um convite pendente para este e-mail.");
+      }
+      tx.create(invitationRef, {
+        tenantId, email, role, status: "pending",
+        invitedBy: auth.uid,
+        expiresAt: new Date(now + 7 * 86400000),
+        createdAt: FieldValue.serverTimestamp()
+      });
     });
     return {
       ok: true,
