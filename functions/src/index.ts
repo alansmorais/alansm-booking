@@ -969,7 +969,7 @@ export const acceptMemberInvitation = onCall(
         throw new HttpsError("already-exists", "Já tem acesso a esta empresa.");
       }
       tx.set(memberRef, {
-        uid: auth.uid, tenantId, email: user.email.toLowerCase(),
+        uid: auth.uid, tenantId, email: (user.email || "").toLowerCase(),
         displayName: cleanText(user.displayName || "", 80),
         role: invite.role, status: "active",
         createdAt: FieldValue.serverTimestamp(), invitedBy: invite.invitedBy
