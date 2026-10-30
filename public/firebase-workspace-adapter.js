@@ -79,6 +79,20 @@
         }
         return result;
       },
+      async acceptInvitation({ tenantId, token } = {}) {
+        const id = String(tenantId || "").trim();
+        const invitationToken = String(token || "").trim();
+        if (!id || id.length > 128) throw new Error("Convite inválido.");
+        if (invitationToken.length < 32 || invitationToken.length > 128) {
+          throw new Error("Convite inválido.");
+        }
+        const user = authAdapter.getCurrentUser();
+        if (!user) throw new Error("Faça login para aceitar o convite.");
+        if (user.emailVerified !== true) {
+          throw new Error("Confirme o seu e-mail antes de aceitar o convite.");
+        }
+        return invoke("acceptMemberInvitation", { tenantId: id, token: invitationToken });
+      },
       async getMembers({ tenantId } = {}) {
         const id = await requireSelectedTenant(tenantId);
         return invoke("getTenantMembers", { tenantId: id });
