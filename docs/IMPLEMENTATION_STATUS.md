@@ -76,3 +76,10 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 ## Schedule administration integration coverage (2026-10-30)
 - Added emulator integration cases for valid weekly company hours, invalid overlapping periods, company closure date ranges, the 90-day limit, block creation/removal and invalid block time ranges.
 - These tests run only against the local Firebase Emulator Suite in GitHub Actions. Results must be observed before treating the endpoints as validated.
+
+
+## Tenant-scoped read APIs (2026-10-30)
+- Added `getTenantCatalog` for safe active professional/service display fields and `getAgendaAppointments` for a bounded (maximum 31 days), optional-professional-filter agenda query.
+- Both require authenticated active owner/admin/staff membership. Tenant IDs are locators only, not authorization.
+- Agenda response omits free-text notes and client contact data, caps results at 500 and reports truncation.
+- Emulator integration coverage checks safe catalog shape, cross-tenant denial and date-window validation. These APIs remain disconnected from the demo frontend and no live Firebase project is configured.
