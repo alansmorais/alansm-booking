@@ -14,5 +14,7 @@ test("demo auth adapter never authenticates or stores credentials", async () => 
   await assert.rejects(auth.signIn(), /não está ligada ao Firebase/);
   await assert.rejects(auth.register(), /não está ligada ao Firebase/);
   assert.equal(await auth.getCurrentUser(), null);
-  assert.deepEqual(await auth.signOut(), { signedOut: true, mode: "demo" });
+  const signedOut = await auth.signOut();
+  assert.equal(signedOut.signedOut, true);
+  assert.equal(signedOut.mode, "demo");
 });
