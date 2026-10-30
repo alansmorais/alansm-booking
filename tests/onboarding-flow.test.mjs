@@ -64,3 +64,51 @@ test("invalid business name is rejected before authentication", async () => {
   await assert.rejects(flow.registerAndCreateWorkspace({ businessName: "A" }), /nome de empresa válido/);
   assert.equal(called, false);
 });
+
+test("verification can be completed later without retaining the password", async () => {
+  const calls = [];
+  let verified = false;
+  const flow = window.BookingOnboarding.createOnboardingFlow({
+    auth: {
+      async register(value) { calls.push(["register", value.password]); },
+      async sendEmailVerification() { calls.push(["verify"]); },
+      async reloadCurrentUser() { calls.push(["reload"]); return { emailVerified: verified }; }
+    },
+    workspace: {
+      async createTenant(input) { calls.push(["tenant", input]); return { tenantId: "tenant-later", ...input }; },
+      async getSession() { calls.push(["session"]); return { tenants: [] }; }
+    }
+  });
+  const first = await flow.registerAndCreateWorkspace({
+    email: "person@example.com", password: "temporary-secret",
+    businessName: "Studio Central", slug: "studio-central"
+  });
+  assert.equal(first.status, "verification-required");
+  assert.equal(calls.some((item) => item[0] === "tenant"), false);
+
+  verified = true;
+  const second = await flow.completeAfterVerification();
+  assert.equal(second.status, "complete");
+  assert.equal(second.tenant.tenantId, "tenant-later");
+  assert.deepEqual(calls.map((item) => item[0]), [
+    "register", "verify", "reload", "reload", "tenant", "session"
+  ]);
+  assert.equal(JSON.stringify(flow).includes("temporary-secret"), false);
+});
+
+test("verification continuation requires company details after a fresh page load", async () => {
+  const flow = window.BookingOnboarding.createOnboardingFlow({
+    auth: {
+      async register() {},
+      async sendEmailVerification() {},
+      async reloadCurrentUser() { return { emailVerified: true }; }
+    },
+    workspace: { async createTenant(input) { return input; }, async getSession() { return {}; } }
+  });
+  await assert.rejects(flow.completeAfterVerification(), /Volte a informar os dados da empresa/);
+  const result = await flow.completeAfterVerification({
+    businessName: "Studio Novo", slug: "studio-novo"
+  });
+  assert.equal(result.status, "complete");
+  assert.equal(result.tenant.slug, "studio-novo");
+});
