@@ -165,3 +165,11 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Acceptance does not require existing tenant membership; it does require a signed-in user with a verified email before the callable Function is invoked.
 - The backend remains authoritative: it checks the token hash, invited email, expiry, pending status and tenant availability transactionally, then creates membership and audit records.
 - Mocked tests cover successful invocation, missing authentication, unverified email and invalid tokens. No real invitation token or Firebase account is used, and the demo application remains unchanged.
+
+
+## Invitation acceptance flow contract (2026-10-30)
+- Added an injectable invitation flow that validates the invitation link inputs, checks for a signed-in user, refreshes the Firebase user and requires verified email before accepting.
+- After the backend confirms acceptance, the flow reloads the workspace session so the newly granted tenant membership can be selected.
+- Added automated tests for successful acceptance ordering, unauthenticated users, unverified email and malformed invitation links. The contract is loaded as a dormant browser module but is not instantiated by the demo app.
+- The previous invitation-adapter test exposed a cross-realm assertion issue in the test harness, not a product behavior issue; the assertion was narrowed to compare the actual scalar fields. The follow-up CI run must confirm the correction.
+- No invitation links are currently generated or distributed by the preview, and no Firebase credentials or live services are configured.
