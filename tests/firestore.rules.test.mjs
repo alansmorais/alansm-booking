@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 
-const projectId = "alansm-booking-rules-test";
+const projectId = "demo-alansm-booking";
 let env;
 
 before(async () => {
@@ -38,10 +38,11 @@ test("active member reads own tenant and appointments", async () => {
   await assertSucceeds(getDoc(doc(db, "tenants", "tenant-a", "appointments", "appointment-a")));
 });
 
-test("member cannot read another tenant", async () => {
+test("member cannot read another tenant or another member's private membership", async () => {
   const db = env.authenticatedContext("owner-a").firestore();
   await assertFails(getDoc(doc(db, "tenants", "tenant-b")));
   await assertFails(getDoc(doc(db, "tenants", "tenant-b", "appointments", "anything")));
+  await assertFails(getDoc(doc(db, "tenants", "tenant-a", "members", "inactive-a")));
 });
 
 test("inactive and unauthenticated users cannot read tenant data", async () => {
