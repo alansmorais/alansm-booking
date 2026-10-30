@@ -31,7 +31,7 @@ test("Firebase workspace calls tenant-scoped callable functions", async () => {
     tenantId: "tenant-1", startAtMs: 1000, endAtMs: 2000, professionalId: "pro-1"
   })).name, "getAgendaAppointments");
   assert.deepEqual(calls.map((call) => call.name), [
-    "createTenant", "getSession", "getTenantCatalog", "getAgendaAppointments"
+    "createTenant", "getSession", "getSession", "getTenantCatalog", "getSession", "getAgendaAppointments"
   ]);
   assert.equal(calls[2].payload.tenantId, "tenant-1");
   assert.equal(calls[3].payload.professionalId, "pro-1");
@@ -55,7 +55,11 @@ test("Firebase workspace rejects invalid agenda interval and missing tenant", as
   const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
     functions: {},
     authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
-    httpsCallable() { return async () => ({ data: {} }); }
+    httpsCallable(_functions, name) {
+      return async () => ({ data: name === "getSession"
+        ? { tenants: [{ tenantId: "tenant-1", name: "Empresa" }] }
+        : {} });
+    }
   });
   await assert.rejects(adapter.getCatalog({}), /Selecione uma empresa/);
   await assert.rejects(adapter.getAgenda({ tenantId: "tenant-1", startAtMs: 5, endAtMs: 5 }), /intervalo válido/);
