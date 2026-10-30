@@ -48,7 +48,8 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - A separate action enters the existing local demo dashboard.
 - Firebase callable Functions `createTenant`, `getSession`, `cancelAppointment` and `createAppointment` exist as source scaffolding, but are not confirmed compiled, emulator-tested or deployed.
 - `cancelAppointment` currently restricts cancellation to active owners/admins and atomically writes appointment status plus an audit event. It is not connected to the UI and must not be exposed before role, tenant-isolation, idempotency and audit tests pass.
-- Booking creation, server-side schedule validation, overlap locks, cancellation lock release and public booking are not implemented yet.
+- `createAppointment` now contains transaction-based overlap guards and idempotency records, but business-hour validation, professional schedules, breaks, leave, date exceptions and timezone-aware availability are not implemented. It is not connected to the frontend or ready for real bookings.
+- Concurrent booking behavior, idempotency replay, cancellation and audit behavior still require emulator integration tests. Public booking is not implemented.
 - Do not describe login, registration or tenant creation as live.
 
 ## Tablet-friendly automated validation (2026-10-30)
