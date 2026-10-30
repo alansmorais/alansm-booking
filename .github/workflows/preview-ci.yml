@@ -1,0 +1,80 @@
+name: Preview CI
+
+on:
+  push:
+    branches: [preview]
+  pull_request:
+    branches: [preview]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate frontend and configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check public/app.js
+          node --check public/auth.js
+          node --check public/availability.js
+
+      - name: Validate JSON configuration
+        run: |
+          node -e "for (const f of ['package.json','firebase.json','firestore.indexes.json','functions/package.json']) JSON.parse(require('fs').readFileSync(f,'utf8')); console.log('JSON files valid')"
+
+  firestore-rules:
+    name: Firestore security rules tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install test dependencies
+        run: npm install
+
+      - name: Run Firestore rules tests in emulator
+        run: npx --yes firebase-tools@latest emulators:exec --project demo-alansm-booking --only firestore "npm run test:rules"
+
+  functions-build:
+    name: Compile Firebase Functions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Functions dependencies
+        run: npm --prefix functions install
+
+      - name: Compile TypeScript
+        run: npm run test:functions:build
