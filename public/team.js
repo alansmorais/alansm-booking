@@ -130,7 +130,7 @@
       const result = await live.workspaceAdapter.inviteMember({
         tenantId: live.tenantId, email: form.elements.email.value.trim(), role: form.elements.role.value
       });
-      const token = result?.token;
+      const token = result?.invitationToken;
       liveNotice = token
         ? "Convite criado. Copie o token abaixo e compartilhe manualmente com a pessoa convidada. Ele é exibido apenas nesta resposta."
         : "Convite criado. O envio automático de e-mail ainda não está configurado.";
