@@ -140,3 +140,13 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Added a sidebar workspace selector and active workspace label to the demo dashboard. This demonstrates the interaction, but does not create additional demo businesses or connect Firebase.
 - Added contract tests for explicit multi-tenant selection, unauthorized tenant rejection, stale selection protection and demo adapter behavior.
 - No tenant creation, switching or data access has been enabled against a live Firebase project.
+
+## Tenant members and access control (2026-10-30)
+- Added trusted callable Functions: `createMemberInvitation`, `acceptMemberInvitation`, `getTenantMembers`, and `updateMemberAccess`.
+- Only tenant owners/admins can list members or create invitations. Invitations are limited to `admin` or `staff`; only owners may promote another member to admin.
+- Invitation tokens are generated with cryptographically secure randomness. Only the SHA-256 hash is stored. The raw token is returned once to the authorized inviter for manual sharing; automatic email delivery is not configured.
+- Invitations expire after seven days, are single-use, and can only be accepted by a signed-in, email-verified Firebase user whose email exactly matches the invited address.
+- Acceptance creates the tenant membership and audit event in one Firestore transaction. Replays, expired invitations, wrong e-mail addresses and unavailable tenants are rejected.
+- Member access can be set to active or suspended. The owner membership cannot be changed through this endpoint. Admins cannot modify another admin.
+- Added integration tests for invitation, acceptance, replay prevention, member listing, suspension and staff authorization.
+- This backend is not connected to the demo UI and no live Firebase project or email provider is configured. Manual invitation-token sharing is a development-stage mechanism, not the final customer-facing invitation experience.
