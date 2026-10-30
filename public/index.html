@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <meta name="description" content="AlanSM Booking — gestão inteligente de agendamentos.">
+  <title>AlanSM Booking · Painel</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#" aria-label="AlanSM Booking início">
+        <span class="brand-mark">A</span><span>AlanSM <b>Booking</b></span>
+      </a>
+      <div class="workspace">
+        <span class="workspace-avatar">B</span>
+        <span><strong>Barbearia Modelo</strong><small>Plano demonstração</small></span>
+        <span class="chevron">⌄</span>
+      </div>
+      <p class="nav-label">MENU PRINCIPAL</p>
+      <nav class="navigation" aria-label="Menu principal">
+        <button class="nav-item active" data-view="overview"><span>▦</span> Visão geral</button>
+        <button class="nav-item" data-view="appointments"><span>▣</span> Agendamentos <i>4</i></button>
+        <button class="nav-item" data-view="professionals"><span>♙</span> Profissionais</button>
+        <button class="nav-item" data-view="services"><span>◇</span> Serviços</button>
+        <button class="nav-item" data-view="clients"><span>♧</span> Clientes</button>
+      </nav>
+      <p class="nav-label settings-label">GESTÃO</p>
+      <nav class="navigation">
+        <button class="nav-item" data-view="public-page"><span>↗</span> Página de reservas</button>
+        <button class="nav-item" data-view="settings"><span>⚙</span> Configurações</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="help-card"><span class="help-icon">?</span><strong>Precisa de ajuda?</strong><small>Consulte o guia de utilização.</small><button type="button" id="helpButton">Ver guia <span>→</span></button></div>
+        <div class="profile"><span class="profile-avatar">AS</span><span><strong>Administrador</strong><small>Conta de demonstração</small></span><button aria-label="Opções da conta">···</button></div>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <button class="mobile-menu" id="menuToggle" aria-label="Abrir menu">☰</button>
+        <div class="breadcrumb">Workspace <span>/</span> <strong id="breadcrumbTitle">Visão geral</strong></div>
+        <div class="top-actions"><span class="demo-pill"><span></span> MODO DEMONSTRAÇÃO</span><button class="icon-button" aria-label="Notificações">♧<i></i></button><span class="top-avatar">AS</span></div>
+      </header>
+      <section class="content" id="content" aria-live="polite"></section>
+      <footer class="footer"><span>AlanSM Booking <b>·</b> MVP de demonstração</span><span>Os dados apresentados são fictícios.</span></footer>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
