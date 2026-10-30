@@ -143,3 +143,52 @@ test("Firebase workspace rejects invalid member mutations before calling Functio
   await assert.rejects(adapter.updateMember({ memberUid: "member-1", role: "owner", status: "active" }), /Perfil ou estado/);
   assert.equal(mutations, 0);
 });
+
+
+test("Firebase workspace accepts an invitation without requiring prior tenant membership", async () => {
+  const calls = [];
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async (payload) => {
+        calls.push({ name, payload });
+        return { data: { ok: true, role: "staff" } };
+      };
+    }
+  });
+  const result = await adapter.acceptInvitation({
+    tenantId: "tenant-invited",
+    token: "x".repeat(48)
+  });
+  assert.equal(result.role, "staff");
+  assert.deepEqual(calls, [{
+    name: "acceptMemberInvitation",
+    payload: { tenantId: "tenant-invited", token: "x".repeat(48) }
+  }]);
+});
+
+test("Firebase workspace blocks invitation acceptance for unverified or invalid users", async () => {
+  let callableCount = 0;
+  const create = (user) => window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => user },
+    httpsCallable() {
+      callableCount += 1;
+      return async () => ({ data: {} });
+    }
+  });
+  await assert.rejects(
+    create({ emailVerified: false }).acceptInvitation({ tenantId: "tenant-1", token: "x".repeat(48) }),
+    /Confirme o seu e-mail/
+  );
+  await assert.rejects(
+    create({ emailVerified: true }).acceptInvitation({ tenantId: "tenant-1", token: "short" }),
+    /Convite inválido/
+  );
+  await assert.rejects(
+    create(null).acceptInvitation({ tenantId: "tenant-1", token: "x".repeat(48) }),
+    /Faça login/
+  );
+  assert.equal(callableCount, 0);
+});
