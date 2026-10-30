@@ -907,7 +907,10 @@ export const createMemberInvitation = onCall(
         !["admin", "staff"].includes(role)) {
       throw new HttpsError("invalid-argument", "E-mail, empresa ou função inválidos.");
     }
-    await requireTenantManager(auth.uid, tenantId);
+    const manager = await requireTenantManager(auth.uid, tenantId);
+    if (manager.role !== "owner" && role === "admin") {
+      throw new HttpsError("permission-denied", "Apenas o proprietário pode convidar outro administrador.");
+    }
     const existingUsers = await getAuth().getUserByEmail(email).catch(() => null);
     if (existingUsers) {
       const existingMember = await db.doc(`tenants/${tenantId}/members/${existingUsers.uid}`).get();
