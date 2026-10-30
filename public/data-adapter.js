@@ -11,13 +11,13 @@
     }
     return Object.freeze({
       mode: "demo",
-      async getCatalog() {
+      getCatalog() {
         return {
           professionals: state.professionals.map((item) => [...item]),
           services: state.services.map((item) => [...item])
         };
       },
-      async getAppointments({ dateFrom = "", dateTo = "", professionalId = "" } = {}) {
+      getAppointments({ dateFrom = "", dateTo = "", professionalId = "" } = {}) {
         return state.appointments
           .filter((item) => (!dateFrom || item.date >= dateFrom) &&
             (!dateTo || item.date <= dateTo) &&
