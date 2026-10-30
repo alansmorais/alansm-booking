@@ -123,3 +123,10 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Both Firebase adapter factories are loaded as dormant definitions, but are not instantiated or selected by the app. The demo auth and demo workspace remain the only active adapters.
 - Added mocked contract tests for Firebase auth and workspace adapters. Tests do not contact Firebase or use credentials.
 - No Firebase SDK initialization, project configuration, API keys, Auth provider, Firestore database, App Check or Functions deployment has been created. A dedicated test Firebase project and explicit approval are still required before activation.
+
+## Email verification continuation (2026-10-30)
+- Onboarding now exposes `completeAfterVerification()` so a user can return after clicking the Firebase verification link, refresh the current Firebase user, and create the tenant only after `emailVerified === true`.
+- Business name, slug, timezone and currency are held only in the in-memory onboarding flow while the page remains open. Passwords are passed to Firebase Auth for account creation and are not retained by the onboarding flow.
+- If the page was refreshed or reopened, the user can supply the business details again to `completeAfterVerification(input)`; no password is needed for that step because Firebase Auth maintains the authenticated session.
+- Added tests for delayed verification, no premature tenant creation, and continuation after a fresh flow instance.
+- The current demo UI remains unchanged and does not expose this Firebase flow; no live Firebase configuration has been added.
