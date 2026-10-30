@@ -130,3 +130,13 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - If the page was refreshed or reopened, the user can supply the business details again to `completeAfterVerification(input)`; no password is needed for that step because Firebase Auth maintains the authenticated session.
 - Added tests for delayed verification, no premature tenant creation, and continuation after a fresh flow instance.
 - The current demo UI remains unchanged and does not expose this Firebase flow; no live Firebase configuration has been added.
+
+## Multi-tenant workspace selection (2026-10-30)
+- The Firebase workspace adapter now loads the authenticated user's active tenant memberships from `getSession`, selects a tenant explicitly when multiple memberships exist, and exposes the selected tenant ID.
+- If exactly one active tenant is returned, it is selected automatically. If multiple tenants exist, the user must choose one before reading workspace data.
+- Before each catalog or agenda read, the adapter refreshes the session and confirms the selected tenant is still an active membership. A requested tenant outside the membership list is rejected; changing to another tenant requires the explicit `selectTenant` operation.
+- After tenant creation, the new tenant becomes the selected workspace. Session refresh validates that membership before any data read.
+- The demo workspace adapter implements the same selection contract and still exposes only the single fictitious Barbearia Modelo tenant.
+- Added a sidebar workspace selector and active workspace label to the demo dashboard. This demonstrates the interaction, but does not create additional demo businesses or connect Firebase.
+- Added contract tests for explicit multi-tenant selection, unauthorized tenant rejection, stale selection protection and demo adapter behavior.
+- No tenant creation, switching or data access has been enabled against a live Firebase project.
