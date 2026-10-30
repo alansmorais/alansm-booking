@@ -9,7 +9,8 @@ Standalone multi-tenant booking SaaS for barbershops, beauty salons, and nail pr
 
 ## Current preview status
 - Responsive demo dashboard with overview, weekly calendar, appointments, professionals, services, clients, public booking page placeholder and settings.
-- Demo availability engine applies opening hours, lunch break, service duration, blocked time and professional-specific appointment overlap checks.
+- Demo availability engine intersects configurable company opening hours, each professional's individual weekly schedule, breaks, date exceptions, blocked time, service duration and appointment overlap checks.
+- Settings include an editable weekly company schedule, individual professional schedule overview, and date-specific company closures. Changes remain in browser memory only.
 - Demo booking form offers available 30-minute start slots and revalidates availability before adding an in-memory appointment.
 - Demo data is fictitious and held in browser memory only.
 - Initial Google Apps Script pilot foundation and spreadsheet schema are in `apps-script/`.
