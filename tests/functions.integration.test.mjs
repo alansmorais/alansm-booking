@@ -5,7 +5,8 @@ const PROJECT = "demo-alansm-booking";
 const AUTH = "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1";
 const FUNCTIONS = `http://127.0.0.1:5001/${PROJECT}/us-central1`;
 let idToken;
-let email;\nlet tenantId;
+let email;
+let tenantId;
 
 async function jsonRequest(url, body, headers = {}) {
   const response = await fetch(url, {
@@ -72,7 +73,8 @@ test("createTenant creates a tenant and owner membership for verified user", asy
   });
   assert.equal(result.data.result?.ok, true, JSON.stringify(result.data));
   assert.equal(result.data.result.tenant.slug, slug);
-  assert.equal(result.data.result.tenant.role, "owner");\n  tenantId = result.data.result.tenant.tenantId;
+  assert.equal(result.data.result.tenant.role, "owner");
+  tenantId = result.data.result.tenant.tenantId;
 });
 
 test("createTenant prevents duplicate public slugs", async () => {
