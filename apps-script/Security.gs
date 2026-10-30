@@ -27,7 +27,7 @@ function normalizeEmail_(email) {
 }
 function safeText_(value, maxLength) {
   let text = String(value == null ? "" : value).trim().slice(0, maxLength || 500);
-  if (/^[=+@\\-\\t\\r]/.test(text)) text = "'" + text;
+  if (/^[=+@\-\t\r]/.test(text)) text = "'" + text;
   return text;
 }
 /**
