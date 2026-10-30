@@ -202,6 +202,11 @@ test("owner can invite a verified user and the invited user can accept once", as
     tenantId, email: inviteEmail.toUpperCase(), role: "staff"
   });
   assert.equal(duplicate.data.error?.status, "ALREADY_EXISTS", JSON.stringify(duplicate.data));
+  const pendingList = await callable("getTenantMembers", { tenantId });
+  assert.equal(pendingList.data.result?.ok, true, JSON.stringify(pendingList.data));
+  const pendingInvite = pendingList.data.result.invitations.find((item) => item.email === inviteEmail);
+  assert.ok(pendingInvite);
+  assert.equal("invitationToken" in pendingInvite, false);
 
   const invitedUser = await adminAuth.createUser({
     email: inviteEmail, password: "Test-password-123!", emailVerified: true
@@ -222,8 +227,6 @@ test("owner can invite a verified user and the invited user can accept once", as
 test("tenant managers can list members without exposing invitation tokens", async () => {
   const members = await callable("getTenantMembers", { tenantId });
   assert.equal(members.data.result?.ok, true, JSON.stringify(members.data));
-  assert.ok(members.data.result.invitations.length > 0);
-  assert.equal("invitationToken" in members.data.result.invitations[0], false);
   const staff = members.data.result.members.find((member) => member.role === "staff");
   assert.ok(staff);
   const updated = await callable("updateMemberAccess", {
