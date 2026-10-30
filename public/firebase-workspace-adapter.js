@@ -7,7 +7,6 @@
       throw new TypeError("Firebase Functions e autenticação válida são obrigatórios.");
     }
 
-    let sessionCache = null;
     let selectedTenantId = null;
 
     async function invoke(name, payload = {}) {
@@ -21,7 +20,6 @@
       if (!user) throw new Error("Faça login para carregar as suas empresas.");
       const session = await invoke("getSession");
       const tenants = Array.isArray(session?.tenants) ? session.tenants : [];
-      sessionCache = session;
       if (!tenants.some((tenant) => tenant.tenantId === selectedTenantId)) {
         selectedTenantId = tenants.length === 1 ? tenants[0].tenantId : null;
       }
@@ -38,13 +36,20 @@
       return tenant;
     }
 
-    function requireSelectedTenant(tenantId) {
-      const id = String(tenantId || selectedTenantId || "").trim();
-      if (!id) throw new Error("Selecione uma empresa.");
-      if (selectedTenantId && id !== selectedTenantId) {
-        throw new Error("A empresa selecionada mudou. Atualize o espaço de trabalho.");
+    async function requireSelectedTenant(tenantId) {
+      const requestedId = String(tenantId || "").trim();
+      const session = await getSession();
+      if (requestedId && requestedId !== selectedTenantId) {
+        const allowed = session.tenants.some((item) => item.tenantId === requestedId);
+        if (!allowed) throw new Error("Não tem acesso a esta empresa.");
+        selectedTenantId = requestedId;
       }
-      return id;
+      if (!selectedTenantId) throw new Error("Selecione uma empresa.");
+      if (!session.tenants.some((item) => item.tenantId === selectedTenantId)) {
+        selectedTenantId = null;
+        throw new Error("Não tem acesso a esta empresa.");
+      }
+      return selectedTenantId;
     }
 
     return Object.freeze({
@@ -68,15 +73,14 @@
         const created = result?.tenant;
         if (created?.tenantId) {
           selectedTenantId = created.tenantId;
-          sessionCache = null;
         }
         return result;
       },
       async getCatalog({ tenantId } = {}) {
-        return invoke("getTenantCatalog", { tenantId: requireSelectedTenant(tenantId) });
+        return invoke("getTenantCatalog", { tenantId: await requireSelectedTenant(tenantId) });
       },
       async getAgenda({ tenantId, startAtMs, endAtMs, professionalId = "" } = {}) {
-        const id = requireSelectedTenant(tenantId);
+        const id = await requireSelectedTenant(tenantId);
         if (!Number.isSafeInteger(startAtMs) || !Number.isSafeInteger(endAtMs) ||
             endAtMs <= startAtMs) {
           throw new Error("Informe um intervalo válido para a agenda.");
