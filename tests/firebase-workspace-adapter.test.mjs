@@ -94,3 +94,52 @@ test("multiple tenants require explicit selection and reject memberships outside
     tenantId: "tenant-a", startAtMs: 1000, endAtMs: 2000
   }), /A empresa selecionada mudou/);
 });
+
+
+test("Firebase workspace scopes member listing, invitations and access changes to selected tenant", async () => {
+  const calls = [];
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async (payload) => {
+        calls.push({ name, payload });
+        if (name === "getSession") return { data: { tenants: [{ tenantId: "tenant-team", name: "Empresa" }] } };
+        return { data: { ok: true, name } };
+      };
+    }
+  });
+  const members = await adapter.getMembers();
+  assert.equal(members.name, "getTenantMembers");
+  const invite = await adapter.inviteMember({ email: "  Pessoa@Exemplo.com ", role: "staff" });
+  assert.equal(invite.name, "createMemberInvitation");
+  const update = await adapter.updateMember({ memberUid: "member-1", role: "staff", status: "suspended" });
+  assert.equal(update.name, "updateMemberAccess");
+  const writes = calls.filter((call) => call.name !== "getSession");
+  assert.deepEqual(writes.map((call) => call.name), [
+    "getTenantMembers", "createMemberInvitation", "updateMemberAccess"
+  ]);
+  assert.ok(writes.every((call) => call.payload.tenantId === "tenant-team"));
+  assert.equal(writes[1].payload.email, "pessoa@exemplo.com");
+  assert.equal(writes[2].payload.status, "suspended");
+});
+
+test("Firebase workspace rejects invalid member mutations before calling Functions", async () => {
+  let mutations = 0;
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async () => {
+        if (name === "getSession") return { data: { tenants: [{ tenantId: "tenant-team", name: "Empresa" }] } };
+        mutations += 1;
+        return { data: {} };
+      };
+    }
+  });
+  await assert.rejects(adapter.inviteMember({ email: "email-invalido", role: "staff" }), /e-mail válido/);
+  await assert.rejects(adapter.inviteMember({ email: "a@b.com", role: "owner" }), /Perfil de acesso inválido/);
+  await assert.rejects(adapter.updateMember({ memberUid: "", role: "staff", status: "active" }), /Membro inválido/);
+  await assert.rejects(adapter.updateMember({ memberUid: "member-1", role: "owner", status: "active" }), /Perfil ou estado/);
+  assert.equal(mutations, 0);
+});
