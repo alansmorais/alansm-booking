@@ -34,10 +34,12 @@ jobs:
           node --check public/auth-adapter.js
           node --check public/workspace-adapter.js
           node --check public/onboarding-flow.js
+          node --check public/firebase-auth-adapter.js
+          node --check public/firebase-workspace-adapter.js
           node --check public/availability.js
           node --check public/data-adapter.js
       - name: Test demo data adapter
-        run: npm run test:adapter && npm run test:auth-adapter && npm run test:workspace-adapter && npm run test:onboarding
+        run: npm run test:adapter && npm run test:auth-adapter && npm run test:workspace-adapter && npm run test:onboarding && npm run test:firebase-adapters
 
       - name: Validate JSON configuration
         run: |
