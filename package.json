@@ -4,7 +4,8 @@
   "scripts": {
     "test:rules": "node --test tests/firestore.rules.test.mjs",
     "test:functions:build": "npm --prefix functions run build",
-    "test": "npm run test:rules && npm run test:functions:build"
+    "test": "npm run test:rules && npm run test:functions:integration && npm run test:functions:build",
+    "test:functions:integration": "node --test tests/functions.integration.test.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",
