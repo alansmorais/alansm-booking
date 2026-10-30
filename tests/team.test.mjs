@@ -44,7 +44,10 @@ test("explicit live mode loads tenant members and pending invitations", async ()
       async getMembers(input) {
         calls.push(input);
         return {
-          members: [{ uid: "user-1", displayName: "Maria Souza", email: "maria@example.com", role: "staff", status: "active" }],
+          members: [
+            { uid: "owner-1", displayName: "Proprietário", email: "owner@example.com", role: "owner", status: "active" },
+            { uid: "user-1", displayName: "<img src=x onerror=alert(1)>", email: "maria@example.com", role: "staff", status: "active" }
+          ],
           invitations: [{ email: "novo@example.com", role: "admin", expiresAtMs: 1794000000000 }]
         };
       },
@@ -55,11 +58,15 @@ test("explicit live mode loads tenant members and pending invitations", async ()
   await team.mount();
   assert.deepEqual(calls.map(x => x.tenantId), ["tenant-42"]);
   assert.match(content.innerHTML, /BACKEND CONECTADO/);
-  assert.match(content.innerHTML, /Maria Souza/);
+  assert.match(content.innerHTML, /Proprietário/);
+  assert.match(content.innerHTML, /&lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(content.innerHTML, /<img src=x/);
+  assert.match(content.innerHTML, /Protegido/);
   assert.match(content.innerHTML, /novo@example.com/);
   assert.match(content.innerHTML, /Suspender/);
   assert.match(content.innerHTML, /Pendente/);
-  assert.doesNotMatch(content.innerHTML, /user-owner/);
+  assert.match(content.innerHTML, /data-team-live-toggle="user-1"/);
+  assert.doesNotMatch(content.innerHTML, /data-team-live-toggle="owner-1"/);
   team.useDemo();
   assert.match(team.render(), /MODO DEMONSTRAÇÃO/);
 });
