@@ -157,3 +157,30 @@ test("saveScheduleBlock rejects invalid time ranges", async () => {
   assert.notEqual(result.data.result?.ok, true);
   assert.equal(result.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(result.data));
 });
+
+
+test("getTenantCatalog returns a bounded safe catalog for an active member", async () => {
+  const result = await callable("getTenantCatalog", { tenantId });
+  assert.equal(result.data.result?.ok, true, JSON.stringify(result.data));
+  assert.ok(Array.isArray(result.data.result.professionals));
+  assert.ok(Array.isArray(result.data.result.services));
+  assert.equal("clients" in result.data.result, false);
+});
+
+test("getTenantCatalog denies access to a tenant without membership", async () => {
+  const result = await callable("getTenantCatalog", { tenantId: "tenant-not-owned-by-user" });
+  assert.equal(result.data.error?.status, "PERMISSION_DENIED", JSON.stringify(result.data));
+});
+
+test("getAgendaAppointments accepts a bounded date window and rejects windows over 31 days", async () => {
+  const startAtMs = Date.now();
+  const valid = await callable("getAgendaAppointments", {
+    tenantId, startAtMs, endAtMs: startAtMs + 7 * 86400000
+  });
+  assert.equal(valid.data.result?.ok, true, JSON.stringify(valid.data));
+  assert.ok(Array.isArray(valid.data.result.appointments));
+  const invalid = await callable("getAgendaAppointments", {
+    tenantId, startAtMs, endAtMs: startAtMs + 32 * 86400000
+  });
+  assert.equal(invalid.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(invalid.data));
+});
