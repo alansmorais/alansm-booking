@@ -1,23 +1,29 @@
 # Google Apps Script pilot backend
 
-This directory contains the first, deliberately limited backend foundation.
+This is a bootstrap foundation, not a production-ready API.
 
 ## Included
-- Versioned spreadsheet schema for tenants, users, professionals, services, appointments, clients, audit events, idempotency keys and revoked tokens.
-- A manual, non-destructive schema initializer.
-- A schema diagnostic that reports tab/header presence only.
-- A fail-closed HTTP API shell. It does not read or write tenant data.
+- Versioned spreadsheet schema and non-destructive setup.
+- PBKDF2-HMAC-SHA256 password hashing (12,000 iterations; benchmark and tune in GAS before pilot).
+- HS256 signed sessions with an 8-hour expiry and revocation list.
+- First-tenant registration, login, current-user lookup and logout service functions.
+- Tenant identifiers embedded in verified session claims.
+- Fail-closed HTTP API shell until the remaining business handlers are implemented.
 
-## Not included yet
-Authentication, password hashing, token issuance/verification, tenant-scoped repositories, public availability, appointment creation/cancellation, rate limiting, locking and audit event handlers. Do not deploy this as a booking API.
+## Configure only in a private Apps Script project
+Script Properties:
+- `SPREADSHEET_ID`: ID of the dedicated pilot spreadsheet.
+- `AUTH_SECRET_KEY`: random secret with at least 32 characters. Generate/store privately; never commit it.
 
-## Safe setup sequence (later, after approval)
-1. Create a dedicated, empty Google Spreadsheet for the pilot.
-2. Create a standalone Apps Script project owned by the platform operator.
-3. Copy the files from this directory into the Apps Script project.
-4. In Project Settings > Script Properties, set `SPREADSHEET_ID` to the spreadsheet ID. Do not commit the ID.
-5. Run `inspectDatabaseSchema()` first and inspect the result.
-6. Run `setupDatabase()` manually only after confirming the target spreadsheet is correct.
-7. Do not deploy a web app until authentication and authorization are implemented and independently tested.
+## Important
+The HTTP API is deliberately not wired to registration/login yet. The service functions require a configured spreadsheet schema and secret. Do not deploy or use with real customer data until runtime benchmarks, endpoint validation, abuse controls, tenant-isolation tests, CSRF/origin strategy for browser use, and independent security review are complete.
 
-The initializer creates missing tabs and headers. It does not clear tabs, delete rows or overwrite existing headers. A header mismatch stops setup for that tab.
+## Safe setup
+1. Create a dedicated spreadsheet.
+2. Create a standalone Apps Script project.
+3. Copy all `.gs` files from this directory.
+4. Set the two Script Properties above.
+5. Run `inspectDatabaseSchema()` and inspect the result.
+6. Run `setupDatabase()` only after confirming the spreadsheet.
+7. Benchmark password hashing and verify JWT test vectors in the GAS runtime.
+8. Keep the web app undeployed until API hardening is complete.
