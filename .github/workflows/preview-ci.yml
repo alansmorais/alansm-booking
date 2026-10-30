@@ -41,8 +41,9 @@ jobs:
           node --check public/availability.js
           node --check public/data-adapter.js
           node --check public/team.js
+          node --check tests/team.test.mjs
       - name: Test demo data adapter
-        run: npm run test:adapter && npm run test:auth-adapter && npm run test:workspace-adapter && npm run test:onboarding && npm run test:invitation && npm run test:invitation-page && npm run test:firebase-adapters
+        run: npm run test:adapter && npm run test:auth-adapter && npm run test:workspace-adapter && npm run test:onboarding && npm run test:invitation && npm run test:invitation-page && npm run test:firebase-adapters && npm run test:team
 
       - name: Validate JSON configuration
         run: |
