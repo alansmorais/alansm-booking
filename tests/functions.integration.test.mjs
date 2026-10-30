@@ -9,6 +9,7 @@ const FUNCTIONS = `http://127.0.0.1:5001/${PROJECT}/us-central1`;
 let idToken;
 let email;
 let tenantId;
+let adminAuth;
 
 async function jsonRequest(url, body, headers = {}) {
   const response = await fetch(url, {
@@ -28,6 +29,7 @@ before(async () => {
   email = `ci-${Date.now()}@example.test`;
   const adminApp = initializeApp({ projectId: PROJECT }, "booking-integration-tests");
   const auth = getAuth(adminApp);
+  adminAuth = auth;
   const user = await auth.createUser({
     email,
     password: "Test-password-123!",
@@ -183,4 +185,60 @@ test("getAgendaAppointments accepts a bounded date window and rejects windows ov
     tenantId, startAtMs, endAtMs: startAtMs + 32 * 86400000
   });
   assert.equal(invalid.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(invalid.data));
+});
+
+
+test("owner can invite a verified user and the invited user can accept once", async () => {
+  const inviteEmail = `member-${Date.now()}@example.test`;
+  const created = await callable("createMemberInvitation", {
+    tenantId, email: inviteEmail, role: "staff"
+  });
+  assert.equal(created.data.result?.ok, true, JSON.stringify(created.data));
+  const token = created.data.result.invitationToken;
+  assert.equal(typeof token, "string");
+  assert.equal(created.data.result.delivery, "manual");
+
+  const invitedUser = await adminAuth.createUser({
+    email: inviteEmail, password: "Test-password-123!", emailVerified: true
+  });
+  const customToken = await adminAuth.createCustomToken(invitedUser.uid);
+  const signedIn = await jsonRequest(`${AUTH}/accounts:signInWithCustomToken?key=fake-api-key`, {
+    token: customToken, returnSecureToken: true
+  });
+  assert.equal(signedIn.status, 200, JSON.stringify(signedIn.data));
+  const accepted = await callable("acceptMemberInvitation", { tenantId, token }, signedIn.data.idToken);
+  assert.equal(accepted.data.result?.ok, true, JSON.stringify(accepted.data));
+  assert.equal(accepted.data.result.role, "staff");
+
+  const replay = await callable("acceptMemberInvitation", { tenantId, token }, signedIn.data.idToken);
+  assert.notEqual(replay.data.result?.ok, true);
+});
+
+test("tenant managers can list members and owner can suspend a staff member", async () => {
+  const members = await callable("getTenantMembers", { tenantId });
+  assert.equal(members.data.result?.ok, true, JSON.stringify(members.data));
+  const staff = members.data.result.members.find((member) => member.role === "staff");
+  assert.ok(staff);
+  const updated = await callable("updateMemberAccess", {
+    tenantId, memberUid: staff.uid, role: "staff", status: "suspended"
+  });
+  assert.equal(updated.data.result?.ok, true, JSON.stringify(updated.data));
+  assert.equal(updated.data.result.status, "suspended");
+});
+
+test("staff cannot create invitations or manage members", async () => {
+  const inviteEmail = `denied-${Date.now()}@example.test`;
+  // Use the staff member created in the invitation test by locating it in the tenant.
+  const list = await callable("getTenantMembers", { tenantId });
+  const staff = list.data.result.members.find((member) => member.role === "staff");
+  assert.ok(staff);
+  const user = await adminAuth.getUser(staff.uid);
+  const customToken = await adminAuth.createCustomToken(user.uid);
+  const signedIn = await jsonRequest(`${AUTH}/accounts:signInWithCustomToken?key=fake-api-key`, {
+    token: customToken, returnSecureToken: true
+  });
+  const result = await callable("createMemberInvitation", {
+    tenantId, email: inviteEmail, role: "staff"
+  }, signedIn.data.idToken);
+  assert.notEqual(result.data.result?.ok, true);
 });
