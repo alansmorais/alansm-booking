@@ -81,5 +81,11 @@
     }
   });
 
+  window.BookingInvitationPage?.mount({
+    gate,
+    search: window.location.search,
+    onChooseAccess: selectTab
+  });
+
   selectTab("login");
 })();
