@@ -5,7 +5,7 @@ const PROJECT = "demo-alansm-booking";
 const AUTH = "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1";
 const FUNCTIONS = `http://127.0.0.1:5001/${PROJECT}/us-central1`;
 let idToken;
-let email;
+let email;\nlet tenantId;
 
 async function jsonRequest(url, body, headers = {}) {
   const response = await fetch(url, {
@@ -72,7 +72,7 @@ test("createTenant creates a tenant and owner membership for verified user", asy
   });
   assert.equal(result.data.result?.ok, true, JSON.stringify(result.data));
   assert.equal(result.data.result.tenant.slug, slug);
-  assert.equal(result.data.result.tenant.role, "owner");
+  assert.equal(result.data.result.tenant.role, "owner");\n  tenantId = result.data.result.tenant.tenantId;
 });
 
 test("createTenant prevents duplicate public slugs", async () => {
@@ -89,4 +89,64 @@ test("getSession returns the signed-in user's tenant membership", async () => {
   assert.equal(result.data.result?.ok, true, JSON.stringify(result.data));
   assert.ok(Array.isArray(result.data.result.tenants));
   assert.ok(result.data.result.tenants.some(tenant => tenant.role === "owner"));
+});
+
+
+test("saveScheduleSettings accepts valid company and professional weekly hours", async () => {
+  const days = {
+    "0": [],
+    "1": [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+    "2": [{ start: "10:00", end: "16:00", breaks: [] }],
+    "3": [], "4": [], "5": [], "6": []
+  };
+  const result = await callable("saveScheduleSettings", { tenantId, scope: "company", days });
+  assert.equal(result.data.result?.ok, true, JSON.stringify(result.data));
+  assert.equal(result.data.result.scheduleId, "company");
+});
+
+test("saveScheduleSettings rejects overlapping or malformed periods", async () => {
+  const days = { "1": [
+    { start: "09:00", end: "13:00", breaks: [] },
+    { start: "12:00", end: "17:00", breaks: [] }
+  ] };
+  const result = await callable("saveScheduleSettings", { tenantId, scope: "company", days });
+  assert.notEqual(result.data.result?.ok, true);
+  assert.equal(result.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(result.data));
+});
+
+test("saveScheduleException writes a bounded company closure date range", async () => {
+  const date = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
+  const result = await callable("saveScheduleException", {
+    tenantId, kind: "companyClosure", startDate: date, endDate: date, reason: "Feriado de teste"
+  });
+  assert.equal(result.data.result?.ok, true, JSON.stringify(result.data));
+  assert.equal(result.data.result.datesSaved, 1);
+});
+
+test("saveScheduleException rejects ranges longer than 90 days", async () => {
+  const startDate = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
+  const endDate = new Date(Date.now() + 110 * 86400000).toISOString().slice(0, 10);
+  const result = await callable("saveScheduleException", {
+    tenantId, kind: "companyClosure", startDate, endDate
+  });
+  assert.notEqual(result.data.result?.ok, true);
+  assert.equal(result.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(result.data));
+});
+
+test("saveScheduleBlock creates and removes a company-wide time block", async () => {
+  const date = new Date(Date.now() + 12 * 86400000).toISOString().slice(0, 10);
+  const created = await callable("saveScheduleBlock", {
+    tenantId, date, start: "14:00", end: "15:30", reason: "Manutenção"
+  });
+  assert.equal(created.data.result?.ok, true, JSON.stringify(created.data));
+  const blockId = created.data.result.blockId;
+  const removed = await callable("saveScheduleBlock", { tenantId, date, blockId, remove: true });
+  assert.equal(removed.data.result?.removed, true, JSON.stringify(removed.data));
+});
+
+test("saveScheduleBlock rejects invalid time ranges", async () => {
+  const date = new Date(Date.now() + 13 * 86400000).toISOString().slice(0, 10);
+  const result = await callable("saveScheduleBlock", { tenantId, date, start: "16:00", end: "15:00" });
+  assert.notEqual(result.data.result?.ok, true);
+  assert.equal(result.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(result.data));
 });
