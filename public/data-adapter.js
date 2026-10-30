@@ -23,6 +23,29 @@
             (!dateTo || item.date <= dateTo) &&
             (!professionalId || item.professional === professionalId))
           .map((item) => ({ ...item }));
+      },
+      getScheduleData() {
+        const clonePeriods = (schedule) => Object.fromEntries(
+          Object.entries(schedule || {}).map(([day, periods]) => [
+            day,
+            (periods || []).map((period) => ({
+              ...period,
+              breaks: (period.breaks || []).map((pause) => ({ ...pause }))
+            }))
+          ])
+        );
+        const professionalSchedules = Object.fromEntries(
+          Object.entries(state.professionalSchedules || {}).map(([professional, schedule]) => [
+            professional, clonePeriods(schedule)
+          ])
+        );
+        return {
+          companySchedule: clonePeriods(state.companySchedule),
+          professionalSchedules,
+          blocks: (state.blocks || []).map((item) => ({ ...item })),
+          exceptions: (state.exceptions || []).map((item) => ({ ...item })),
+          professionalExceptions: (state.professionalExceptions || []).map((item) => ({ ...item }))
+        };
       }
     });
   }
