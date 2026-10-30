@@ -78,7 +78,7 @@ The Functions source contains four callable endpoints in `functions/src/index.ts
 - `cancelAppointment`: owner/admin-only cancellation with an atomic audit event.
 - `createAppointment`: authenticated booking creation with service-derived duration/price, per-professional/per-UTC-day transaction guards, overlap checks, idempotency and audit records.
 
-`createAppointment` does not yet validate opening hours, breaks, leave, date exceptions or timezone-aware business schedules. Booking endpoints are not connected to the frontend and are not ready for real bookings.
+`createAppointment` now checks company and professional schedules, breaks, company closure dates, professional absence dates and date-specific blocks using the tenant IANA timezone. Schedule documents use `scheduleSettings/company` and `scheduleSettings/professional_{professionalId}` with weekday keys `0`–`6` and arrays of `{start,end,breaks}` periods; closures use `scheduleExceptions/{YYYY-MM-DD}`; absences use `professionalExceptions/{professionalId}_{YYYY-MM-DD}`; blocks use a local date and `HH:MM` start/end. Multi-day absences must be expanded to one document per local date. Appointments crossing local midnight are currently rejected. These data documents still require trusted setup handlers. Booking endpoints are not connected to the frontend and are not ready for real bookings.
 
 `firebase.json` points to the `functions/` source using Node.js 22. A collection-group index supports the membership lookup. These endpoints are source-code scaffolding only: they have not been compiled against installed dependencies, run in the Emulator Suite, or deployed. App Check is not enforced yet.
 
