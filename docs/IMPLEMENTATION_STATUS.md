@@ -48,3 +48,13 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - A separate action enters the existing local demo dashboard.
 - Firebase callable Functions `createTenant` and `getSession` exist as source scaffolding, but are not compiled, emulator-tested or deployed.
 - Do not describe login, registration or tenant creation as live.
+
+## Tablet-friendly automated validation (2026-10-30)
+- Added GitHub Actions workflow `.github/workflows/preview-ci.yml` for preview pushes, pull requests and manual runs.
+- CI validates frontend JavaScript syntax and JSON configuration.
+- Firestore Rules are tested against the local Firestore Emulator.
+- Firebase Functions are compiled with Node.js 22.
+- Auth + callable Functions integration tests use only local Auth, Firestore and Functions emulators.
+- Integration coverage includes unauthenticated tenant creation, verified-user tenant creation, duplicate slug rejection and session membership retrieval.
+- No production Firebase project, secrets, billing or live user data are used by these tests.
+- Workflow files and tests have been committed, but a successful GitHub Actions run has not yet been observed; do not mark CI green until the run is checked.
