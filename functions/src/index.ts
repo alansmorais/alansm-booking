@@ -883,7 +883,7 @@ export const getAgendaAppointments = onCall(
 
 
 type CreateMemberInvitationInput = { tenantId?: unknown; email?: unknown; role?: unknown };
-type AcceptMemberInvitationInput = { token?: unknown };
+type AcceptMemberInvitationInput = { tenantId?: unknown; token?: unknown };
 type UpdateMemberAccessInput = { tenantId?: unknown; memberUid?: unknown; role?: unknown; status?: unknown };
 
 async function requireTenantManager(uid: string, tenantId: string) {
@@ -947,10 +947,10 @@ export const acceptMemberInvitation = onCall(
     if (user.disabled || !user.emailVerified || !user.email) {
       throw new HttpsError("failed-precondition", "Entre com um e-mail confirmado para aceitar o convite.");
     }
-    const invitationRef = db.doc(`tenants/${cleanText((request.data || {}).tenantId, 128)}/invitations/${sha256(token)}`);
     // Tenant ID is supplied only as a locator; the invitation and email are verified transactionally.
-    const tenantId = cleanText((request.data || {}).tenantId, 128);
+    const tenantId = cleanText(input.tenantId, 128);
     if (!validDocumentId(tenantId)) throw new HttpsError("invalid-argument", "Convite inválido.");
+    const invitationRef = db.doc(`tenants/${tenantId}/invitations/${sha256(token)}`);
     const memberRef = db.doc(`tenants/${tenantId}/members/${auth.uid}`);
     const tenantRef = db.doc(`tenants/${tenantId}`);
     return db.runTransaction(async (tx) => {
@@ -1013,6 +1013,9 @@ export const updateMemberAccess = onCall(
       if (!member.exists || member.data()?.role === "owner") {
         throw new HttpsError("failed-precondition", "O proprietário ou membro não pode ser alterado desta forma.");
       }
+      if (manager.role !== "owner" && member.data()?.role === "admin") {
+        throw new HttpsError("permission-denied", "Apenas o proprietário pode alterar outro administrador.");
+      }
       tx.update(memberRef, { role, status, updatedAt: FieldValue.serverTimestamp(), updatedBy: auth.uid });
       tx.create(auditRef, {
         tenantId, actorUid: auth.uid, action: "member.access_updated",
@@ -1021,5 +1024,35 @@ export const updateMemberAccess = onCall(
       });
     });
     return { ok: true, memberUid, role, status };
+  }
+);
+
+
+export const getTenantMembers = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 10 },
+  async (request) => {
+    const auth = requireUser(request);
+    const tenantId = cleanText((request.data || {}).tenantId, 128);
+    await requireTenantManager(auth.uid, tenantId);
+    const [members, invitations] = await Promise.all([
+      db.collection(`tenants/${tenantId}/members`).limit(100).get(),
+      db.collection(`tenants/${tenantId}/invitations`).where("status", "==", "pending").limit(100).get()
+    ]);
+    return {
+      ok: true,
+      members: members.docs.map((doc) => {
+        const value = doc.data();
+        return {
+          uid: doc.id, email: cleanText(value.email, 254),
+          displayName: cleanText(value.displayName, 80),
+          role: cleanText(value.role, 20), status: cleanText(value.status, 20)
+        };
+      }),
+      invitations: invitations.docs.map((doc) => ({
+        invitationId: doc.id, email: cleanText(doc.data().email, 254),
+        role: cleanText(doc.data().role, 20),
+        expiresAtMs: doc.data().expiresAt?.toMillis?.() || null
+      }))
+    };
   }
 );
