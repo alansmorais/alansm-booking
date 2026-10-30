@@ -115,3 +115,11 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Added tests for slug normalization, invalid input, unverified-email blocking and the successful verified sequence.
 - The flow is an injectable orchestration contract only. The current demo auth/workspace adapters do not provide Firebase operations, so no live registration or tenant creation is possible.
 - CI checks the onboarding module and runs its tests. Firebase Auth SDK integration and live confirmation-email handling remain pending an approved Firebase test project.
+
+## Firebase client adapter preparation (2026-10-30)
+- Added injectable Firebase Authentication adapter factory in `public/firebase-auth-adapter.js`. It wraps account creation, sign-in, profile display name, email verification, user reload and sign-out using SDK functions supplied by the host.
+- Added callable Functions workspace adapter in `public/firebase-workspace-adapter.js` for `createTenant`, `getSession`, `getTenantCatalog` and `getAgendaAppointments`.
+- The workspace adapter checks for an authenticated user and verified email before tenant creation, and validates tenant selection and agenda intervals before calling backend functions.
+- Both Firebase adapter factories are loaded as dormant definitions, but are not instantiated or selected by the app. The demo auth and demo workspace remain the only active adapters.
+- Added mocked contract tests for Firebase auth and workspace adapters. Tests do not contact Firebase or use credentials.
+- No Firebase SDK initialization, project configuration, API keys, Auth provider, Firestore database, App Check or Functions deployment has been created. A dedicated test Firebase project and explicit approval are still required before activation.
