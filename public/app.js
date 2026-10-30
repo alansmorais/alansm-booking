@@ -45,10 +45,34 @@ function persistDemoState(){
 restoreDemoState();
 const dataAdapter=window.BookingData.createDemoAdapter(state);
 const workspaceAdapter=window.BookingWorkspace.createDemoWorkspaceAdapter({authAdapter:window.BookingAuth.createDemoAdapter(),dataAdapter});
+let activeWorkspaceName="Barbearia Modelo";
+const workspaceSelect=document.getElementById("workspaceSelect");
+const workspaceName=document.getElementById("workspaceName");
+const workspaceRole=document.getElementById("workspaceRole");
+const initialWorkspaceSession=workspaceAdapter.getSession();
+(initialWorkspaceSession.tenants||[]).forEach(tenant=>{
+ const option=document.createElement("option");
+ option.value=tenant.id||tenant.tenantId;
+ option.textContent=tenant.name;
+ option.selected=option.value===(initialWorkspaceSession.selectedTenantId||option.value);
+ workspaceSelect.appendChild(option);
+});
+const initialTenant=(initialWorkspaceSession.tenants||[]).find(tenant=>(tenant.id||tenant.tenantId)===workspaceSelect.value);
+if(initialTenant){activeWorkspaceName=initialTenant.name;workspaceName.textContent=initialTenant.name;workspaceRole.textContent=initialTenant.role==="owner"?"Proprietário · Demonstração":"Acesso · Demonstração";}
+workspaceSelect.addEventListener("change",async()=>{
+ try{
+  const tenant=await workspaceAdapter.selectTenant(workspaceSelect.value);
+  activeWorkspaceName=tenant.name;
+  workspaceName.textContent=tenant.name;
+  workspaceRole.textContent=(tenant.role==="owner"?"Proprietário":"Acesso")+" · Demonstração";
+  render();
+  toast("Espaço de trabalho alterado.");
+ }catch(error){toast(error.message);workspaceSelect.value=workspaceAdapter.getSession().selectedTenantId||"";}
+});
 const titles={overview:"Visão geral",calendar:"Agenda semanal",appointments:"Agendamentos",professionals:"Profissionais",services:"Serviços",clients:"Clientes","public-page":"Página de reservas",settings:"Configurações"};
 const content=document.getElementById("content");
 const escapeHTML=value=>String(value??"").replace(/[&<>\"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
-function heading(title,sub,action=""){return `<div class="page-heading"><div><div class="eyebrow">BARBEARIA MODELO</div><h1>${title}</h1><p>${sub}</p></div>${action}</div>`;}
+function heading(title,sub,action=""){return `<div class="page-heading"><div><div class="eyebrow">${escapeHTML(activeWorkspaceName)}</div><h1>${title}</h1><p>${sub}</p></div>${action}</div>`;}
 function table(headers,rows){return `<div class="panel table-wrap"><table class="data-table"><thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join("")}</tr>`).join(""):`<tr><td colspan="${headers.length}" class="empty-state">Nenhum registo encontrado.</td></tr>`}</tbody></table></div>`;}
 function overview(){return heading("Olá, Administrador 👋","Aqui está o resumo da sua operação.",'<button class="primary-btn" data-action="new-appointment">＋ Novo agendamento</button>')+`
 <div class="stats-grid"><div class="stat-card"><div class="stat-top">Agendamentos na demonstração</div><div class="stat-value">${state.appointments.length}</div><div class="stat-foot">Registos fictícios desta sessão</div></div><div class="stat-card"><div class="stat-top">Profissionais</div><div class="stat-value">${state.professionals.length}</div><div class="stat-foot">Equipa de demonstração</div></div><div class="stat-card"><div class="stat-top">Serviços</div><div class="stat-value">${state.services.length}</div><div class="stat-foot">Com duração configurada</div></div><div class="stat-card"><div class="stat-top">Horário de funcionamento</div><div class="stat-value">09–18h</div><div class="stat-foot">Segunda a sexta · sábado até 14h</div></div></div>
