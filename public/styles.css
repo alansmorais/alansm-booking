@@ -38,3 +38,5 @@
 @media(max-width:520px){.auth-card{padding:25px 20px}.auth-card h1{font-size:22px}}
 
 .workspace-details{min-width:0;flex:1}.workspace-details strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.workspace select{width:28px;min-width:28px;padding:5px 0;border:0;border-radius:5px;background:#293653;color:#e7ebf4;font:10px 'DM Sans';cursor:pointer}.workspace select:focus{outline:2px solid #7890ff;outline-offset:2px}.workspace select option{background:#1c2638;color:#fff}
+
+.team-panel{margin-bottom:16px}.team-invite-form{display:grid;grid-template-columns:minmax(180px,1fr) 180px auto;align-items:end;gap:12px}.team-invite-form label{display:grid;gap:6px;font-size:10px;font-weight:600}.team-invite-form input,.team-invite-form select{width:100%;padding:11px;border:1px solid var(--line);border-radius:8px;background:#fff;font:11px "DM Sans"}.team-note{margin-top:12px;padding:12px 14px;background:#f5f7ff;border-radius:9px;color:#6674ac;font-size:10px;line-height:1.6}@media(max-width:700px){.team-invite-form{grid-template-columns:1fr}.team-invite-form button{width:100%}}
