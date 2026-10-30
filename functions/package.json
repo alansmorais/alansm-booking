@@ -2,7 +2,9 @@
   "name": "alansm-booking-functions",
   "private": true,
   "main": "lib/index.js",
-  "engines": { "node": "20" },
+  "engines": {
+    "node": "22"
+  },
   "scripts": {
     "build": "tsc",
     "emulate": "firebase emulators:start --only auth,firestore,functions",
