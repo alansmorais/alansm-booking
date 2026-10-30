@@ -16,6 +16,9 @@ test("Firebase workspace calls tenant-scoped callable functions", async () => {
     httpsCallable(_functions, name) {
       return async (payload) => {
         calls.push({ name, payload });
+        if (name === "getSession") {
+          return { data: { ok: true, name, tenants: [{ tenantId: "tenant-1", name: "Barbearia" }] } };
+        }
         return { data: { ok: true, name } };
       };
     }
