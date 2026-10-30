@@ -98,3 +98,12 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Added automated tests proving login/registration remain unavailable and the adapter reports no authenticated user.
 - CI checks the new file's syntax and runs both data/auth adapter tests.
 - A Firebase-backed implementation remains a separate future step and requires an approved dedicated Firebase test project before connecting credentials or real authentication.
+
+## Workspace and tenant adapter boundary (2026-10-30)
+- Added `public/workspace-adapter.js` as the frontend boundary for session lookup, tenant creation, catalog reads, agenda reads and schedule reads.
+- The demo implementation exposes only a clearly fictitious sample tenant and delegates catalog/agenda/schedule reads to the demo data adapter.
+- Tenant creation deliberately fails closed in demo mode. No tenant, user or business data is created in Firebase.
+- Dashboard agenda, catalog and availability reads now pass through the workspace adapter, preparing one replacement point for a future authenticated Firebase implementation.
+- Added tests for demo tenant isolation, delegated reads and refusal to operate with non-demo dependencies.
+- GitHub Actions now validates the workspace adapter syntax and runs its contract tests alongside the existing adapter tests.
+- This is an interface boundary, not a live tenant system. Firebase authentication, tenant onboarding and workspace reads remain disconnected from the frontend.
