@@ -651,3 +651,57 @@ export const saveScheduleSettings = onCall(
     return { ok: true, scheduleId: id };
   }
 );
+
+type ScheduleExceptionInput = { tenantId?: unknown; kind?: unknown; professionalId?: unknown; startDate?: unknown; endDate?: unknown; reason?: unknown };
+function isLocalDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  const parsed = new Date(value + "T00:00:00.000Z");
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+/** Saves company closures or professional absences, one record per local date. */
+export const saveScheduleException = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 10 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as ScheduleExceptionInput;
+    const tenantId = cleanText(input.tenantId, 128);
+    const kind = cleanText(input.kind, 30);
+    const professionalId = cleanText(input.professionalId, 128);
+    const startDate = input.startDate;
+    const endDate = input.endDate ?? input.startDate;
+    const reason = cleanText(input.reason, 240);
+    if (!validDocumentId(tenantId) || !["companyClosure", "professionalAbsence"].includes(kind) ||
+        (kind === "professionalAbsence" && !validDocumentId(professionalId)) ||
+        !isLocalDate(startDate) || !isLocalDate(endDate) || endDate < startDate) {
+      throw new HttpsError("invalid-argument", "Período de indisponibilidade inválido.");
+    }
+    const tenant = await requireScheduleAdmin(auth.uid, tenantId);
+    if (kind === "professionalAbsence" &&
+        !(await db.doc(`tenants/${tenantId}/professionals/${professionalId}`).get()).exists) {
+      throw new HttpsError("not-found", "Profissional não encontrado.");
+    }
+    const first = new Date(startDate + "T00:00:00.000Z").getTime();
+    const last = new Date(endDate + "T00:00:00.000Z").getTime();
+    const count = Math.round((last - first) / 86400000) + 1;
+    if (count > 90) throw new HttpsError("invalid-argument", "O período máximo é de 90 dias por operação.");
+    const collection = kind === "companyClosure" ? "scheduleExceptions" : "professionalExceptions";
+    const records = Array.from({ length: count }, (_, index) => {
+      const date = new Date(first + index * 86400000).toISOString().slice(0, 10);
+      const id = kind === "companyClosure" ? date : `${professionalId}_${date}`;
+      return { date, ref: db.doc(`tenants/${tenantId}/${collection}/${id}`) };
+    });
+    const batch = db.batch();
+    const now = FieldValue.serverTimestamp();
+    for (const record of records) {
+      batch.set(record.ref, { tenantId, date: record.date, kind,
+        professionalId: kind === "professionalAbsence" ? professionalId : null,
+        reason, timezone: cleanText(tenant.timezone, 80), updatedAt: now, updatedBy: auth.uid });
+    }
+    const audit = db.collection(`tenants/${tenantId}/auditLog`).doc();
+    batch.create(audit, { tenantId, actorUid: auth.uid, action: "schedule.exception_saved",
+      resourceType: "scheduleException", resourceId: records[0].ref.id, reason, createdAt: now });
+    await batch.commit();
+    return { ok: true, datesSaved: count };
+  }
+);
