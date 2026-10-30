@@ -7,6 +7,28 @@
   const login = gate.querySelector("#authLoginForm");
   const register = gate.querySelector("#authRegisterForm");
   const title = gate.querySelector("#authTitle");
+  const businessName = register.querySelector('[name="businessName"]');
+  const slug = register.querySelector('[name="slug"]');
+  const slugPreview = gate.querySelector("#slugPreview");
+  let slugEdited = false;
+
+  slug.addEventListener("input", () => {
+    slugEdited = true;
+    updateSlugPreview();
+  });
+  businessName.addEventListener("input", () => {
+    if (!slugEdited) {
+      slug.value = window.BookingOnboarding.normalizeSlug(businessName.value);
+    }
+    updateSlugPreview();
+  });
+
+  function updateSlugPreview() {
+    const value = window.BookingOnboarding.normalizeSlug(slug.value);
+    slugPreview.textContent = value
+      ? "Link previsto: /" + value
+      : "O endereço será usado no link público da sua empresa.";
+  }
 
   function notify(message) {
     const toast = document.getElementById("toast");
