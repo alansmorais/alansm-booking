@@ -15,6 +15,10 @@ Script Properties:
 - `SPREADSHEET_ID`: ID of the dedicated pilot spreadsheet.
 - `AUTH_SECRET_KEY`: random secret with at least 32 characters. Generate/store privately; never commit it.
 
+## Frontend preview persistence
+
+The browser preview currently saves fictitious workspace data in versioned `localStorage` under `alansm-booking-demo-v1`. This preserves demo appointments, schedules, professionals, services, clients, blocks and date exceptions across reloads in the same browser profile. It is **not** a database, is not encrypted, is not shared across devices or users, and must never be used for real customer data. Clearing browser storage removes it. This is a temporary UX bridge while the authenticated Sheets API is implemented and reviewed.
+
 ## Important
 The HTTP API is deliberately not wired to registration/login yet. The service functions require a configured spreadsheet schema and secret. Do not deploy or use with real customer data until runtime benchmarks, endpoint validation, abuse controls, tenant-isolation tests, CSRF/origin strategy for browser use, and independent security review are complete.
 
