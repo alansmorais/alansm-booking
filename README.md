@@ -29,3 +29,6 @@ Google Sheets + Google Apps Script is the selected pilot direction. The earlier 
 3. Add a frontend adapter with local mock as the default.
 4. Test concurrency, duplicate submissions, cross-tenant access, token expiry/revocation and input sanitization.
 5. Only then prepare a controlled pilot deployment.
+
+## Online preview
+The preview site is deployed separately from all production websites at `https://alansm-booking-preview.pages.dev` when the Cloudflare Pages build completes. The preview contains fictitious browser-only data; no real bookings are processed.
