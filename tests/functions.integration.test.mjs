@@ -1,5 +1,7 @@
 import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
+import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 
 const PROJECT = "demo-alansm-booking";
 const AUTH = "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1";
@@ -24,17 +26,16 @@ async function callable(name, data, token = idToken) {
 
 before(async () => {
   email = `ci-${Date.now()}@example.test`;
-  const signup = await jsonRequest(`${AUTH}/accounts:signUp?key=fake-api-key`, {
-    email, password: "Test-password-123!", returnSecureToken: true
+  const adminApp = initializeApp({ projectId: PROJECT }, "booking-integration-tests");
+  const auth = getAuth(adminApp);
+  const user = await auth.createUser({
+    email,
+    password: "Test-password-123!",
+    emailVerified: true
   });
-  assert.equal(signup.status, 200, JSON.stringify(signup.data));
-  idToken = signup.data.idToken;
-  const verified = await jsonRequest(`${AUTH}/accounts:update?key=fake-api-key`, {
-    idToken, emailVerified: true, returnSecureToken: true
-  });
-  assert.equal(verified.status, 200, JSON.stringify(verified.data));
-  const signin = await jsonRequest(`${AUTH}/accounts:signInWithPassword?key=fake-api-key`, {
-    email, password: "Test-password-123!", returnSecureToken: true
+  const customToken = await auth.createCustomToken(user.uid);
+  const signin = await jsonRequest(`${AUTH}/accounts:signInWithCustomToken?key=fake-api-key`, {
+    token: customToken, returnSecureToken: true
   });
   assert.equal(signin.status, 200, JSON.stringify(signin.data));
   idToken = signin.data.idToken;
