@@ -181,3 +181,11 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 - Invitees can choose the existing sign-in or registration tab. The page clearly states that real acceptance is not enabled in this demo until Firebase authentication is approved and configured.
 - Added parser tests and included the new page module in frontend syntax checks and CI tests.
 - The panel is presentation-only in demo mode: it does not authenticate, accept an invitation, call Firebase or grant access. No production routing or Firebase configuration was changed.
+
+
+## Team management frontend adapter boundary (2026-10-30)
+- Extended the team screen with an explicitly injected Firebase workspace mode for listing tenant members and pending invitations, creating invitations, and suspending/reactivating non-owner memberships.
+- The existing local demonstration remains the default. Firebase mode can only be selected by an explicit configureLive({ workspaceAdapter, tenantId }) call using an adapter marked firebase; the current app does not make that call.
+- The team route invokes the module mount hook, which is a no-op in demo mode and loads members only after live mode has been explicitly configured.
+- The raw invitation token is not persisted; if a live adapter returns one, the UI displays it once for manual private sharing. No email provider is configured.
+- The frontend wiring is still dormant. No Firebase SDK initialization, live credentials, customer data, Functions deployment or App Check configuration has been added. Do not treat this as an activated production team workflow.
