@@ -759,3 +759,124 @@ export const saveScheduleBlock = onCall(
     return { ok: true, blockId: ref.id, removed: false };
   }
 );
+
+
+type TenantReadInput = { tenantId?: unknown; startAtMs?: unknown; endAtMs?: unknown; professionalId?: unknown };
+
+/** Shared read authorization: tenantId locates data but never grants access. */
+async function requireTenantReader(uid: string, tenantId: string) {
+  if (!validDocumentId(tenantId)) throw new HttpsError("invalid-argument", "Empresa inválida.");
+  const [user, tenant, member] = await Promise.all([
+    getAuth().getUser(uid),
+    db.doc(`tenants/${tenantId}`).get(),
+    db.doc(`tenants/${tenantId}/members/${uid}`).get()
+  ]);
+  if (user.disabled || !tenant.exists || tenant.data()?.status !== "active" ||
+      !member.exists || member.data()?.status !== "active") {
+    throw new HttpsError("permission-denied", "Não tem acesso a esta empresa.");
+  }
+  const role = cleanText(member.data()?.role, 20);
+  if (!["owner", "admin", "staff"].includes(role)) {
+    throw new HttpsError("permission-denied", "Não tem permissão para consultar os dados da agenda.");
+  }
+  return { tenant: tenant.data()!, role };
+}
+
+/**
+ * Returns a deliberately small catalog for the authenticated tenant.
+ * No client records, contact details, credentials or internal billing data are exposed.
+ */
+export const getTenantCatalog = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 20 },
+  async (request) => {
+    const auth = requireUser(request);
+    const tenantId = cleanText((request.data || {}).tenantId, 128);
+    await requireTenantReader(auth.uid, tenantId);
+
+    const [professionals, services] = await Promise.all([
+      db.collection(`tenants/${tenantId}/professionals`).where("status", "==", "active").limit(100).get(),
+      db.collection(`tenants/${tenantId}/services`).where("status", "==", "active").limit(200).get()
+    ]);
+    return {
+      ok: true,
+      professionals: professionals.docs.map((doc) => {
+        const value = doc.data();
+        return {
+          id: doc.id,
+          name: cleanText(value.name || value.displayName, 100),
+          status: "active",
+          ...(typeof value.color === "string" ? { color: cleanText(value.color, 20) } : {})
+        };
+      }),
+      services: services.docs.map((doc) => {
+        const value = doc.data();
+        return {
+          id: doc.id,
+          name: cleanText(value.name || value.title, 100),
+          status: "active",
+          durationMinutes: Number.isInteger(value.durationMinutes) ? value.durationMinutes : null,
+          priceMinor: Number.isSafeInteger(value.priceMinor) ? value.priceMinor : null,
+          currency: /^[A-Z]{3}$/.test(value.currency) ? value.currency : null
+        };
+      })
+    };
+  }
+);
+
+/**
+ * Bounded tenant agenda read. The client supplies epoch milliseconds for a
+ * tenant-local date window resolved by the caller; this endpoint validates a
+ * maximum 31-day interval and returns no client PII or free-text notes.
+ */
+export const getAgendaAppointments = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 20 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as TenantReadInput;
+    const tenantId = cleanText(input.tenantId, 128);
+    const startAtMs = input.startAtMs;
+    const endAtMs = input.endAtMs;
+    const professionalId = cleanText(input.professionalId, 128);
+    await requireTenantReader(auth.uid, tenantId);
+
+    if (!Number.isSafeInteger(startAtMs) || !Number.isSafeInteger(endAtMs) ||
+        (endAtMs as number) <= (startAtMs as number) ||
+        (endAtMs as number) - (startAtMs as number) > 31 * 86400000 ||
+        (professionalId && !validDocumentId(professionalId))) {
+      throw new HttpsError("invalid-argument", "Intervalo da agenda inválido. Consulte no máximo 31 dias.");
+    }
+
+    const start = (startAtMs as number) - MAX_SERVICE_MINUTES * 60000;
+    const end = endAtMs as number;
+    let query: FirebaseFirestore.Query = db.collection(`tenants/${tenantId}/appointments`)
+      .where("startAt", ">=", new Date(start))
+      .where("startAt", "<", new Date(end))
+      .orderBy("startAt", "asc")
+      .limit(500);
+    if (professionalId) query = query.where("professionalId", "==", professionalId);
+
+    const snapshot = await query.get();
+    const appointments = snapshot.docs.flatMap((doc) => {
+      const value = doc.data();
+      const startMs = value.startAt?.toMillis?.();
+      const endMs = value.endAt?.toMillis?.();
+      if (!Number.isFinite(startMs) || !Number.isFinite(endMs) ||
+          endMs <= (startAtMs as number) || startMs >= end ||
+          !["pending", "booked", "confirmed", "cancelled", "completed", "no_show"].includes(value.status)) {
+        return [];
+      }
+      return [{
+        id: doc.id,
+        professionalId: cleanText(value.professionalId, 128),
+        serviceId: cleanText(value.serviceId, 128),
+        clientId: cleanText(value.clientId, 128),
+        startAtMs: startMs,
+        endAtMs: endMs,
+        status: cleanText(value.status, 24),
+        priceMinor: Number.isSafeInteger(value.priceMinor) ? value.priceMinor : null,
+        currency: /^[A-Z]{3}$/.test(value.currency) ? value.currency : null
+      }];
+    });
+    return { ok: true, appointments, truncated: snapshot.size === 500 };
+  }
+);
