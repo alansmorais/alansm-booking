@@ -421,7 +421,7 @@ test("Firebase workspace rejects invalid appointment input before invoking Funct
   }), /intervalos de cinco minutos/);
   await assert.rejects(adapter.createAppointment({
     professionalId: "professional-1", serviceId: "service-1", clientId: "client-1",
-    startAtMs: Date.now() + 86400000, idempotencyKey: "short"
+    startAtMs: Math.ceil((Date.now() + 86400000) / 300000) * 300000, idempotencyKey: "short"
   }), /Chave de operação inválida/);
   assert.equal(mutations, 0);
 });
