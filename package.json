@@ -4,7 +4,7 @@
   "scripts": {
     "test:rules": "node --test tests/firestore.rules.test.mjs",
     "test:functions:build": "npm --prefix functions run build",
-    "test": "npm run test:rules && npm run test:functions:integration && npm run test:functions:build",
+    "test": "npm run test:rules && npm run test:functions:integration && npm run test:functions:build && npm run test:firebase-init",
     "test:functions:integration": "node --test tests/functions.integration.test.mjs",
     "test:adapter": "node --test tests/data-adapter.test.mjs",
     "test:auth-adapter": "node --test tests/auth-adapter.test.mjs",
