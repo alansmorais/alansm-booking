@@ -128,6 +128,34 @@ test("getTenantSchedule returns tenant-scoped weekly settings", async () => {
   assert.deepEqual(result.data.result.exceptions, []);
 });
 
+test("getTenantSchedule sanitizes malformed and unexpected schedule fields", async () => {
+  await adminDb.doc(`tenants/${tenantId}/scheduleSettings/company`).set({
+    tenantId, scope: "company", timezone: "Europe/Warsaw",
+    days: {
+      "1": [{ start: "09:00", end: "17:00", breaks: [], privateNote: "must not be returned" }],
+      "2": [{ start: "not-a-time", end: "17:00", breaks: [] }],
+      unexpected: [{ start: "00:00", end: "23:59", breaks: [] }]
+    },
+    privateField: "must not be returned"
+  });
+  await adminDb.doc(`tenants/${tenantId}/scheduleSettings/professional_safe-test`).set({
+    tenantId, days: { "3": [{ start: "10:00", end: "12:00", breaks: [], privateNote: "hidden" }] }
+  });
+
+  const result = await callable("getTenantSchedule", {
+    tenantId, startDate: "2026-10-01", endDate: "2026-10-31"
+  });
+  assert.equal(result.data.result?.ok, true, JSON.stringify(result.data));
+  const schedule = result.data.result.companySchedule;
+  assert.deepEqual(schedule["1"], [{ start: "09:00", end: "17:00", breaks: [] }]);
+  assert.deepEqual(schedule["2"], []);
+  assert.equal(schedule.unexpected, undefined);
+  assert.equal(JSON.stringify(schedule).includes("privateNote"), false);
+  assert.deepEqual(result.data.result.professionalSchedules["safe-test"]["3"], [
+    { start: "10:00", end: "12:00", breaks: [] }
+  ]);
+});
+
 test("getTenantSchedule rejects invalid or oversized date windows", async () => {
   const invalid = await callable("getTenantSchedule", {
     tenantId, startDate: "2026-10-31", endDate: "2026-10-01"
