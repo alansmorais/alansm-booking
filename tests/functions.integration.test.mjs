@@ -440,13 +440,11 @@ test("cancelAppointment cancels once, records audit and treats replay as idempot
 });
 
 test("cancelAppointment rejects staff and does not modify another tenant appointment", async () => {
-  const otherTenant = await callable("createTenant", {
-    name: "Outra empresa de teste",
-    slug: `other-${Date.now()}`,
+  const otherTenantId = `tenant-isolated-${Date.now()}`;
+  await adminDb.doc(`tenants/${otherTenantId}`).set({
+    tenantId: otherTenantId, name: "Tenant isolado", status: "active",
     timezone: "Europe/Warsaw", currency: "PLN"
   });
-  assert.equal(otherTenant.data.result?.ok, true, JSON.stringify(otherTenant.data));
-  const otherTenantId = otherTenant.data.result.tenant.tenantId;
   const appointmentId = `isolated-${Date.now()}`;
   const otherRef = adminDb.doc(`tenants/${otherTenantId}/appointments/${appointmentId}`);
   await otherRef.set({
@@ -472,8 +470,14 @@ test("cancelAppointment rejects staff and does not modify another tenant appoint
     token: customToken, returnSecureToken: true
   });
   assert.equal(signin.status, 200, JSON.stringify(signin.data));
+  const staffAppointmentId = `staff-cancel-${Date.now()}`;
+  await adminDb.doc(`tenants/${tenantId}/appointments/${staffAppointmentId}`).set({
+    tenantId, status: "confirmed",
+    startAt: new Date(Date.now() + 5 * 86400000),
+    endAt: new Date(Date.now() + 5 * 86400000 + 3600000)
+  });
   const staffDenied = await callable("cancelAppointment", {
-    tenantId: otherTenantId, appointmentId
+    tenantId, appointmentId: staffAppointmentId
   }, signin.data.idToken);
   assert.equal(staffDenied.data.error?.status, "PERMISSION_DENIED", JSON.stringify(staffDenied.data));
 });
