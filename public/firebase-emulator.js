@@ -55,6 +55,7 @@
       window.BookingFirebaseRuntime = Object.freeze({ mode: "demo", ready: Promise.resolve(null) });
       return;
     }
+    document.documentElement.dataset.bookingBackend = "firebase-emulator";
 
     const base = "https://www.gstatic.com/firebasejs/" + SDK_VERSION + "/";
     await loadScript(base + "firebase-app-compat.js");
@@ -96,7 +97,7 @@
       window.BookingFirebaseRuntime = Object.freeze({
         mode: "error",
         error,
-        ready: Promise.reject(error)
+        ready: Promise.resolve(null)
       });
       throw error;
     })
