@@ -2,7 +2,7 @@ name: Preview CI
 
 on:
   push:
-    branches: [preview]
+    branches: [preview, firebase-emulator-bootstrap]
   pull_request:
     branches: [preview]
   workflow_dispatch:
