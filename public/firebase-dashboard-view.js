@@ -235,7 +235,7 @@
             const name=document.createElement("strong");name.textContent=member.displayName||member.email||"Membro";
             const detail=document.createElement("span");detail.textContent=(member.email||"")+" · "+member.role+" · "+(member.status==="active"?"Ativo":"Suspenso");
             info.append(name,detail);row.append(info);
-            if(member.role!=="owner"){
+            if(member.role!=="owner" && !(tenant.role==="admin" && member.role==="admin")){
               const controls=document.createElement("div");controls.className="firebase-management-row-actions";
               const role=document.createElement("select");role.setAttribute("aria-label","Permissão de "+(member.email||"membro"));
               role.innerHTML='<option value="staff">Equipe</option>'+(tenant.role==="owner"?'<option value="admin">Administrador</option>':"");
