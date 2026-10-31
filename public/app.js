@@ -36,6 +36,7 @@ function restoreDemoState(){
 }
 function persistDemoState(){
  try{
+  if(window.BookingSnapshot)window.BookingSnapshot.ensureStableIds(state);
   const data={};
   DEMO_PERSISTED_KEYS.forEach(key=>{data[key]=state[key];});
   localStorage.setItem(DEMO_STORAGE_KEY,JSON.stringify({version:1,savedAt:new Date().toISOString(),data}));
@@ -43,6 +44,7 @@ function persistDemoState(){
  }catch(error){demoStorageAvailable=false;console.warn("Não foi possível guardar a demonstração local.",error);toast("O navegador não conseguiu guardar os dados desta demonstração.");}
 }
 restoreDemoState();
+if(window.BookingSnapshot)window.BookingSnapshot.ensureStableIds(state);
 window.addEventListener("storage",event=>{if(event.key!==DEMO_STORAGE_KEY||!event.newValue)return;try{const saved=JSON.parse(event.newValue);if(saved?.version!==1||!saved.data)return;DEMO_PERSISTED_KEYS.forEach(key=>{if(saved.data[key]!==undefined)state[key]=saved.data[key];});render();toast("Dados atualizados a partir da página de reservas.");}catch(error){console.warn("Não foi possível sincronizar a demonstração entre abas.",error);}});
 const dataAdapter=window.BookingData.createDemoAdapter(state);
 const workspaceAdapter=window.BookingWorkspace.createDemoWorkspaceAdapter({authAdapter:window.BookingAuth.createDemoAdapter(),dataAdapter});
