@@ -43,6 +43,7 @@ Start the app and emulators in separate terminals from the repository root:
 ```bash
 # Terminal 1: install Functions dependencies once
 npm --prefix functions install
+npm --prefix functions run build
 
 # Terminal 2: start local Auth, Firestore and Functions emulators
 npx firebase-tools emulators:start --project demo-alansm-booking --only auth,firestore,functions
