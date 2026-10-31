@@ -1146,3 +1146,85 @@ export const saveCatalogItem = onCall(
     return { ok: true, kind, itemId: ref.id, status };
   }
 );
+
+
+type SaveClientInput = {
+  tenantId?: unknown; clientId?: unknown; name?: unknown;
+  phone?: unknown; email?: unknown; notes?: unknown; status?: unknown;
+};
+
+/** Bounded, tenant-scoped client directory. Contact data is never exposed by Firestore rules. */
+export const getTenantClients = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 15 },
+  async (request) => {
+    const auth = requireUser(request);
+    const tenantId = cleanText((request.data || {}).tenantId, 128);
+    await requireTenantReader(auth.uid, tenantId);
+    const snapshot = await db.collection(`tenants/${tenantId}/clients`)
+      .orderBy("updatedAt", "desc").limit(200).get();
+    return {
+      ok: true,
+      clients: snapshot.docs.flatMap((doc) => {
+        const value = doc.data();
+        if (value.status === "inactive") return [];
+        return [{
+          id: doc.id,
+          name: cleanText(value.name, 100),
+          phone: cleanText(value.phone, 30),
+          email: cleanText(value.email, 254),
+          notes: cleanText(value.notes, 300),
+          status: cleanText(value.status || "active", 20)
+        }];
+      }),
+      truncated: snapshot.size === 200
+    };
+  }
+);
+
+export const saveTenantClient = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 15 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as SaveClientInput;
+    const tenantId = cleanText(input.tenantId, 128);
+    const clientId = cleanText(input.clientId, 128);
+    const name = cleanText(input.name, 100);
+    const phone = cleanText(input.phone, 30);
+    const email = cleanText(input.email, 254).toLowerCase();
+    const notes = cleanText(input.notes, 300);
+    const status = cleanText(input.status || "active", 20);
+    if (!validDocumentId(tenantId) || (clientId && !validDocumentId(clientId)) ||
+        !["active", "inactive"].includes(status) ||
+        (status === "active" && name.length < 2) ||
+        (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) ||
+        (phone && !/^[+0-9() .-]{7,30}$/.test(phone))) {
+      throw new HttpsError("invalid-argument", "Nome, contacto ou estado do cliente inválido.");
+    }
+    await requireTenantReader(auth.uid, tenantId);
+    const collection = db.collection(`tenants/${tenantId}/clients`);
+    const ref = clientId ? collection.doc(clientId) : collection.doc();
+    const auditRef = db.collection(`tenants/${tenantId}/auditLog`).doc();
+    const now = FieldValue.serverTimestamp();
+    await db.runTransaction(async (tx) => {
+      const existing = await tx.get(ref);
+      if (clientId && !existing.exists) throw new HttpsError("not-found", "Cliente não encontrado.");
+      const previous = existing.data() || {};
+      const data: Record<string, unknown> = {
+        tenantId,
+        name: name || cleanText(previous.name, 100),
+        phone: phone || (input.phone === "" ? "" : cleanText(previous.phone, 30)),
+        email: email || (input.email === "" ? "" : cleanText(previous.email, 254)),
+        notes: notes || (input.notes === "" ? "" : cleanText(previous.notes, 300)),
+        status, updatedAt: now, updatedBy: auth.uid
+      };
+      if (!existing.exists) data.createdAt = now;
+      tx.set(ref, data, { merge: true });
+      tx.create(auditRef, {
+        tenantId, actorUid: auth.uid,
+        action: `client.${existing.exists ? (status === "inactive" ? "deactivated" : "updated") : "created"}`,
+        resourceType: "client", resourceId: ref.id, createdAt: now
+      });
+    });
+    return { ok: true, clientId: ref.id, status };
+  }
+);
