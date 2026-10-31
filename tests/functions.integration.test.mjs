@@ -470,7 +470,9 @@ test("createAppointment enforces idempotency and prevents overlapping concurrent
     })
   ]);
 
-  const startAtMs = Math.ceil((Date.now() + 48 * 60 * 60 * 1000) / 300000) * 300000;
+  const testStart = new Date(Date.now() + 48 * 60 * 60 * 1000);
+  testStart.setUTCHours(10, 0, 0, 0); // Keep the fixture safely inside the tenant local business day.
+  const startAtMs = testStart.getTime();
   const payload = {
     tenantId, professionalId, serviceId, clientId, startAtMs,
     notes: "Teste de idempotência", idempotencyKey: `booking-idem-${Date.now()}`
