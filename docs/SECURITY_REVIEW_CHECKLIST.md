@@ -28,7 +28,8 @@ This checklist is a pre-activation review for the isolated `preview` branch. It 
 - [ ] Firestore rules deny client-side writes to operational records.
 - [ ] Client/contact records have least-privilege read rules; staff access is explicitly justified or denied.
 - [ ] Agenda responses omit unnecessary personal data and free-text notes.
-- [ ] Schedule, exception and block mutations enforce owner/admin authorization and validate tenant scope.
+- [x] Schedule, exception and block mutations enforce owner/admin authorization and validate tenant scope; block updates preserve original creation metadata.
+- [x] Schedule read responses whitelist valid weekday periods and break fields, excluding unexpected stored fields.
 - [ ] Audit events are written atomically with privileged mutations and cannot be edited by clients.
 
 ## Booking integrity
@@ -64,3 +65,10 @@ The preview branch now includes integration coverage for:
 - Concurrent booking conflict handling, booking idempotency, altered-key reuse, cross-tenant denial and closed-hours rejection.
 
 These are automated test assertions in the repository, not evidence of a deployed Firebase backend. The Functions source is still not deployed. App Check remains a release blocker until a dedicated development Firebase project and client provider configuration exist. The public preview remains a UI/demo environment; do not treat it as a live booking service.
+
+
+## Additional schedule hardening — 2026-10-31
+- [x] Schedule block updates preserve original creation timestamp and creator; missing block IDs fail closed.
+- [x] Schedule read API returns only valid weekday periods and approved break fields; malformed periods become empty and unknown weekday keys/extra fields are omitted.
+- [x] Emulator integration tests cover both behaviors.
+- [ ] Confirm the new CI run for the active `firebase-emulator-bootstrap` branch before marking this latest change set green.
