@@ -270,6 +270,53 @@
         });
         try{await loadTeam();}catch(error){teamStatus.textContent="Não foi possível carregar a equipe: "+(error.message||"erro desconhecido");}
       }
+
+      if (typeof workspace?.getClients === "function" && typeof workspace?.saveClient === "function") {
+        const panel=document.createElement("section");
+        panel.className="firebase-readonly-section firebase-client-management";
+        panel.innerHTML='<h2>Clientes</h2><p>Contactos guardados de forma privada dentro desta empresa. Apenas membros autorizados podem consultar estes dados.</p><div class="firebase-client-status" role="status">A carregar clientes…</div><div class="firebase-client-list"></div><form class="firebase-client-form"><h3>Novo cliente</h3><input type="hidden" name="clientId"><label>Nome<input name="name" minlength="2" maxlength="100" required></label><label>E-mail<input name="email" type="email" maxlength="254"></label><label>Telefone<input name="phone" type="tel" maxlength="40"></label><label>Observações<textarea name="notes" maxlength="500" rows="2"></textarea></label><div class="firebase-client-actions"><button class="primary-btn" type="submit">Guardar cliente</button><button class="secondary-btn" type="button" data-client-reset>Limpar</button></div></form>';
+        data.append(panel);
+        const clientStatus=panel.querySelector(".firebase-client-status");
+        const clientList=panel.querySelector(".firebase-client-list");
+        const clientForm=panel.querySelector(".firebase-client-form");
+        const resetClient=()=>{clientForm.reset();clientForm.elements.clientId.value="";panel.querySelector("h3").textContent="Novo cliente";};
+        const loadClients=async()=>{
+          clientStatus.textContent="A carregar clientes…";
+          const result=await workspace.getClients({tenantId:tenant.tenantId});
+          clientList.replaceChildren();
+          const clients=result.clients||[];
+          if(!clients.length){const empty=document.createElement("p");empty.className="firebase-readonly-empty";empty.textContent="Ainda não há clientes cadastrados.";clientList.append(empty);}
+          clients.forEach(client=>{
+            const row=document.createElement("div");row.className="firebase-client-row";
+            const info=document.createElement("div");const name=document.createElement("strong");name.textContent=client.name;
+            const contact=document.createElement("span");contact.textContent=[client.email,client.phone].filter(Boolean).join(" · ")||"Sem contacto";
+            const note=document.createElement("small");note.textContent=client.notes||"";
+            info.append(name,contact,note);
+            const actions=document.createElement("div");actions.className="firebase-client-row-actions";
+            const edit=document.createElement("button");edit.type="button";edit.className="secondary-btn";edit.textContent="Editar";
+            edit.addEventListener("click",()=>{clientForm.elements.clientId.value=client.id;clientForm.elements.name.value=client.name||"";clientForm.elements.email.value=client.email||"";clientForm.elements.phone.value=client.phone||"";clientForm.elements.notes.value=client.notes||"";panel.querySelector("h3").textContent="Editar cliente";clientForm.scrollIntoView({behavior:"smooth",block:"center"});});
+            actions.append(edit);
+            if(client.status==="active"){
+              const deactivate=document.createElement("button");deactivate.type="button";deactivate.className="secondary-btn";deactivate.textContent="Desativar";
+              deactivate.addEventListener("click",async()=>{deactivate.disabled=true;try{await workspace.saveClient({tenantId:tenant.tenantId,clientId:client.id,name:client.name,email:client.email,phone:client.phone,notes:client.notes,active:false});await loadClients();clientStatus.textContent="Cliente desativado."; }catch(error){clientStatus.textContent="Não foi possível desativar: "+(error.message||"erro desconhecido");deactivate.disabled=false;}});
+              actions.append(deactivate);
+            }
+            row.append(info,actions);clientList.append(row);
+          });
+          clientStatus.textContent=(clients.length?"Clientes carregados: "+clients.length+". ":"Nenhum cliente cadastrado.")+(result.truncated?" A lista está limitada aos 200 registos mais recentes.":"");
+        };
+        clientForm.addEventListener("submit",async event=>{
+          event.preventDefault();const button=clientForm.querySelector('button[type="submit"]');button.disabled=true;clientStatus.textContent="A guardar cliente…";
+          const values=new FormData(clientForm);
+          try{
+            await workspace.saveClient({tenantId:tenant.tenantId,clientId:String(values.get("clientId")||""),name:String(values.get("name")||""),email:String(values.get("email")||""),phone:String(values.get("phone")||""),notes:String(values.get("notes")||""),active:true});
+            resetClient();await loadClients();clientStatus.textContent="Cliente guardado com sucesso.";
+          }catch(error){clientStatus.textContent="Não foi possível guardar: "+(error.message||"erro desconhecido");}
+          finally{button.disabled=false;}
+        });
+        panel.querySelector("[data-client-reset]").addEventListener("click",resetClient);
+        try{await loadClients();}catch(error){clientStatus.textContent="Não foi possível carregar clientes: "+(error.message||"erro desconhecido");}
+      }
       state.textContent="Dados carregados do Firebase. Ações disponíveis conforme as permissões da sua conta.";
       state.dataset.kind="success";
     } catch(error) {
@@ -283,6 +330,9 @@
 
   const managementStyle=document.createElement("style");
   managementStyle.textContent='.firebase-management [hidden]{display:none!important}.firebase-management>p{color:#64748b}.firebase-management-status{padding:10px 12px;background:#f1f5f9;border-radius:9px;margin:12px 0;color:#334155;font-size:13px}.firebase-management-list{display:grid;grid-template-columns:1fr 1fr;gap:16px}.firebase-management-group h3,.firebase-management-form h3{font-size:15px;margin:10px 0}.firebase-management-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #e5e7eb}.firebase-management-row strong,.firebase-management-row span,.firebase-management-row small{display:block}.firebase-management-row span,.firebase-management-row small{font-size:12px;color:#64748b;margin-top:3px}.firebase-management-row-actions,.firebase-management-actions{display:flex;gap:8px;flex-wrap:wrap}.firebase-management-form{border-top:1px solid #e5e7eb;margin-top:18px;padding-top:18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.firebase-management-form h3{grid-column:1/-1}.firebase-management-form label{display:grid;gap:6px;font-size:13px;color:#475569}.firebase-management-form input,.firebase-management-form select{min-width:0;width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.firebase-management-actions{grid-column:1/-1}.firebase-management button:disabled{opacity:.55;cursor:wait}@media(max-width:700px){.firebase-management-list{grid-template-columns:1fr}.firebase-management-form{grid-template-columns:1fr}.firebase-management-row{align-items:flex-start;flex-direction:column}}';
+  const clientStyle=document.createElement("style");
+  clientStyle.textContent='.firebase-client-management>p{color:#64748b}.firebase-client-list{display:grid;grid-template-columns:1fr 1fr;gap:10px}.firebase-client-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid #e5e7eb;border-radius:10px}.firebase-client-row strong,.firebase-client-row span,.firebase-client-row small{display:block}.firebase-client-row span,.firebase-client-row small{font-size:12px;color:#64748b;margin-top:4px;overflow-wrap:anywhere}.firebase-client-row-actions,.firebase-client-actions{display:flex;gap:8px;flex-wrap:wrap}.firebase-client-status{padding:10px 12px;background:#f1f5f9;border-radius:9px;margin:12px 0;color:#334155;font-size:13px}.firebase-client-form{border-top:1px solid #e5e7eb;margin-top:18px;padding-top:18px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.firebase-client-form h3,.firebase-client-form label:nth-of-type(4),.firebase-client-actions{grid-column:1/-1}.firebase-client-form label{display:grid;gap:6px;font-size:13px;color:#475569}.firebase-client-form input,.firebase-client-form textarea{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.firebase-client-management button:disabled{opacity:.55;cursor:wait}@media(max-width:700px){.firebase-client-list,.firebase-client-form{grid-template-columns:1fr}.firebase-client-row{align-items:flex-start;flex-direction:column}}';
+  document.head.append(clientStyle);
   const scheduleStyle=document.createElement("style");
   scheduleStyle.textContent='.schedule-days{grid-column:1/-1;display:grid;gap:8px}.schedule-day-row{display:grid;grid-template-columns:minmax(150px,1.4fr) 1fr 1fr;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #e5e7eb}.schedule-day-row label{display:flex;align-items:center;gap:8px;font-size:13px;color:#475569}.schedule-day-row input[type=time]{min-width:0;width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.schedule-day-enabled input{width:auto}.schedule-current{margin-top:18px}.schedule-current h3{font-size:15px}@media(max-width:700px){.schedule-day-row{grid-template-columns:1fr 1fr}.schedule-day-enabled{grid-column:1/-1}}';
   const teamStyle=document.createElement("style");
