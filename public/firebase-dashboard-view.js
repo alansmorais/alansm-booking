@@ -154,9 +154,11 @@
           const period=periods[0]||{};
           return '<div class="schedule-day-row"><label class="schedule-day-enabled"><input type="checkbox" name="enabled_'+index+'" '+(periods.length?'checked':'')+'> '+day+'</label><label>Abre<input type="time" name="start_'+index+'" value="'+escape(period.start||"09:00")+'"></label><label>Fecha<input type="time" name="end_'+index+'" value="'+escape(period.end||"18:00")+'"></label></div>';
         }).join("");
+        const scheduleCatalog=await workspace.getCatalogForManagement({tenantId:tenant.tenantId});
+        const scheduleProfessionals=Array.isArray(scheduleCatalog.professionals)?scheduleCatalog.professionals:[];
         const fillProfessionalOptions=(select,includeCompany)=>{
           select.innerHTML=(includeCompany?'<option value="">Toda a empresa</option>':'<option value="">Selecione</option>')+
-            managed.professionals.filter(item=>item.status==="active").map(item=>'<option value="'+escape(item.id)+'">'+escape(item.name)+'</option>').join("");
+            scheduleProfessionals.filter(item=>item.status==="active").map(item=>'<option value="'+escape(item.id)+'">'+escape(item.name)+'</option>').join("");
         };
         fillProfessionalOptions(exceptionForm.elements.professionalId,false);
         fillProfessionalOptions(blockForm.elements.professionalId,true);
