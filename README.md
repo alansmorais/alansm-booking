@@ -44,6 +44,34 @@ Do not introduce a second backend or migrate the primary architecture without an
 7. Keep public booking disabled until its customer-facing flow and abuse protections are implemented and tested.
 8. Perform a security and operational review before any controlled pilot with real users.
 
+## Local Firebase Emulator development
+
+The browser SDK is initialized only when both conditions are true:
+- The app is served from `localhost`, `127.0.0.1` or `::1`.
+- The URL includes `?firebaseEmulator=1`.
+
+Example local workflow (run the commands in separate terminals):
+
+```bash
+# Terminal 1 — start local Firebase services; never point this command at a real project.
+firebase emulators:start --only auth,firestore,functions --project demo-alansm-booking
+
+# Terminal 2 — serve the static frontend.
+python -m http.server 4173 --directory public
+```
+
+Open `http://localhost:4173/?firebaseEmulator=1` to load the local Firebase SDK and connect
+Auth (9099), Firestore (8080) and Functions (5001) to loopback only. Open
+`http://localhost:4173/` for the normal demo experience.
+
+The emulator bootstrap uses a fixed demo project ID and placeholder API key. It refuses
+to initialize on preview or production hostnames, and does not read Firebase configuration
+from query parameters, browser storage, or remote runtime settings. The bootstrap does not
+switch the current login or dashboard adapters to Firebase; that wiring is a later development
+phase. Until then, the demo remains the only user-facing application mode.
+
+Automated bootstrap checks: `npm run test:firebase-init`.
+
 ## Online preview
 The current static preview is available at:
 
