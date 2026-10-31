@@ -43,6 +43,7 @@
     }
 
     async function loadSchedule({ startDate, endDate, ...options } = {}) {
+      if (!professionalNames.size) await loadCatalog(options);
       const result = await workspace.getSchedule({ ...options, startDate, endDate });
       return {
         companySchedule: result.companySchedule || {},
@@ -65,6 +66,7 @@
     }
 
     async function loadAgenda({ startAtMs, endAtMs, ...options } = {}) {
+      if (!professionalNames.size || !serviceNames.size) await loadCatalog(options);
       const result = await workspace.getAgenda({ ...options, startAtMs, endAtMs });
       const zone = text(timeZone, "UTC");
       return {
