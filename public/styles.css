@@ -63,3 +63,8 @@
 .auth-notice[data-kind="success"] strong{color:#16734c}
 .auth-notice[data-kind="error"]{border-color:#f1d1d1;background:#fff6f6}
 .auth-notice[data-kind="error"] strong{color:#a13e3e}
+
+
+/* Catalog management actions */
+.row-actions{display:flex;gap:6px;flex-wrap:wrap}.small-btn{min-height:29px;padding:0 9px;font-size:9px}.danger-btn{color:#a43d3d;border-color:#f0d6d6;background:#fffafa}.danger-btn:hover{background:#fff0f0}.data-table td:last-child{min-width:145px}
+@media(max-width:600px){.row-actions{gap:5px}.small-btn{min-height:32px}}
