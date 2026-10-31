@@ -70,6 +70,9 @@
     async function loadAgenda({ startAtMs, endAtMs, ...options } = {}) {
       if (!professionalNames.size || !serviceNames.size) await loadCatalog(options);
       const result = await workspace.getAgenda({ ...options, startAtMs, endAtMs });
+      const clientsResult = typeof workspace.getClients === "function"
+        ? await workspace.getClients(options) : { clients: [] };
+      const clientNames = new Map((clientsResult.clients || []).map((client) => [client.id, text(client.name, "Cliente")]));
       const zone = activeTimeZone;
       return {
         appointments: (result.appointments || []).map((item) => {
@@ -82,7 +85,7 @@
           };
           return {
             id: item.id, date: start.date, time: start.time, endTime: end.time, duration,
-            name: "Cliente", clientId: item.clientId || "",
+            name: clientNames.get(item.clientId) || "Cliente", clientId: item.clientId || "",
             serviceId: item.serviceId || "", professionalId: item.professionalId || "",
             service: serviceName(item.serviceId), professional: professionalName(item.professionalId),
             status: statuses[item.status] || "Pendente",
