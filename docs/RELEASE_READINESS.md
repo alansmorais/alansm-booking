@@ -28,7 +28,7 @@ These checks validate source and local emulator behavior. They do not prove that
 - Trusted Functions for tenant onboarding/session, member invitations and access, catalog reads/writes, schedule administration, agenda reads and appointment operations.
 - Firestore rules and emulator tests for tenant isolation and role boundaries.
 - Firebase dashboard adapter source for translating catalog, schedule and agenda reads.
-- Authenticated Firebase preview view with owner/admin catalog CRUD and schedule controls for company/professional weekly hours, closures, absences and time blocks; mutations call tenant-scoped trusted Functions.
+- Authenticated Firebase preview view with owner/admin catalog CRUD, company/professional schedule controls, team membership management, manual invitation links and verified invitation acceptance; mutations call tenant-scoped trusted Functions.
 
 ## Important integration boundary
 
@@ -42,7 +42,7 @@ The sign-in/onboarding UI, catalog management and schedule management must be va
 - No real Firebase Auth/Firestore/Functions end-to-end run has been performed.
 - No live Firebase dashboard CRUD or schedule flow has been accepted end-to-end against a dedicated development project.
 - Public booking is still a fictitious local demo; no public booking backend/availability journey is ready.
-- Email invitation delivery is not configured; invitation delivery is manual.
+- Email invitation delivery is not configured; owners/admins must manually send the generated invitation link to the invited email. The link is one-time and expires after seven days.
 - App Check is not enforced by the callable functions (`enforceAppCheck: false`).
 - Rate limiting/abuse controls, operational monitoring, backup/retention and deployment runbooks need final review.
 - No production release or real customer data.
@@ -51,7 +51,7 @@ The sign-in/onboarding UI, catalog management and schedule management must be va
 
 1. Finish the local browser acceptance flow with Auth, Firestore and Functions emulators: register, verify email, sign in, create tenant, restore session, select tenant, invite/accept a member, and test role restrictions.
 2. Wire the dashboard shell to select the Firebase adapters only when the explicit development/emulator mode is active; keep demo as default and fail closed on Firebase errors.
-3. Finish browser acceptance and UI-level tests for catalog, schedule and agenda management; connect team and remaining dashboard screens to trusted Functions.
+3. Finish browser acceptance and UI-level tests for catalog, schedule, team invitations and agenda management; connect remaining dashboard screens to trusted Functions.
 4. Implement the public booking backend and customer journey separately, including abuse protection and idempotency.
 5. Configure invitation email delivery using an approved provider.
 6. Configure a dedicated Firebase development project, App Check, secrets and monitoring only after explicit authorization.
