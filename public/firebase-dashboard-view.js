@@ -72,6 +72,59 @@
         '<section class="firebase-readonly-section"><h2>Serviços</h2>'+(services.length?'<ul>'+services.map(s=>'<li>'+escape(s[0])+' <span>'+escape(s[1]+' min')+' · '+escape(s[2])+'</span></li>').join("")+'</ul>':'<p class="firebase-readonly-empty">Nenhum serviço cadastrado.</p>')+'</section></div>'+
         '<section class="firebase-readonly-section"><h2>Horários e disponibilidade</h2><p>Fuso horário: '+escape(schedule.timezone||"não informado")+'.'+(schedule.truncated?' Alguns registos foram limitados pela consulta.':'')+'</p><p>Os horários e bloqueios foram carregados do workspace autorizado.</p></section>';
 
+
+      if (typeof workspace?.createAppointment === "function" && typeof workspace?.getClients === "function") {
+        const bookingPanel=document.createElement("section");
+        bookingPanel.className="firebase-readonly-section firebase-appointment-form";
+        bookingPanel.innerHTML='<h2>Novo agendamento</h2><p>O servidor confirma a disponibilidade, os horários de funcionamento e os conflitos antes de guardar a reserva.</p><div class="firebase-appointment-status" role="status">A preparar formulário…</div><form><label>Cliente<select name="clientId" required><option value="">Selecionar cliente</option></select></label><label>Serviço<select name="serviceId" required><option value="">Selecionar serviço</option></select></label><label>Profissional<select name="professionalId" required><option value="">Selecionar profissional</option></select></label><label>Data<input name="date" type="date" required></label><label>Hora<input name="time" type="time" step="300" required value="09:00"></label><label>Observações<textarea name="notes" rows="2" maxlength="500"></textarea></label><div class="firebase-appointment-actions"><button type="submit" class="primary-btn">Confirmar agendamento</button></div></form>';
+        data.insertBefore(bookingPanel,data.firstChild);
+        const bookingStatus=bookingPanel.querySelector(".firebase-appointment-status");
+        const bookingForm=bookingPanel.querySelector("form");
+        const fillOptions=(select,items,placeholder)=>{select.replaceChildren();const first=document.createElement("option");first.value="";first.textContent=placeholder;select.append(first);items.forEach(item=>{const option=document.createElement("option");option.value=item.id;option.textContent=item.name;select.append(option);});};
+        try{
+          const [clientResult,liveCatalog]=await Promise.all([
+            workspace.getClients({tenantId:tenant.tenantId}),
+            workspace.getCatalog({tenantId:tenant.tenantId})
+          ]);
+          fillOptions(bookingForm.elements.clientId,(clientResult.clients||[]).filter(item=>item.status==="active"),"Selecionar cliente");
+          fillOptions(bookingForm.elements.serviceId,(liveCatalog.services||[]).filter(item=>item.status==="active"),"Selecionar serviço");
+          fillOptions(bookingForm.elements.professionalId,(liveCatalog.professionals||[]).filter(item=>item.status==="active"),"Selecionar profissional");
+          bookingForm.elements.date.min=startDate;
+          bookingForm.elements.date.value=startDate;
+          bookingStatus.textContent="Formulário pronto. Horários indisponíveis serão rejeitados pelo servidor.";
+        }catch(error){bookingStatus.textContent="Não foi possível preparar o formulário: "+(error.message||"erro desconhecido");}
+        bookingForm.addEventListener("submit",async event=>{
+          event.preventDefault();
+          const submit=bookingForm.querySelector('button[type="submit"]');submit.disabled=true;bookingStatus.textContent="A validar disponibilidade e a guardar…";
+          try{
+            const values=new FormData(bookingForm);
+            const date=String(values.get("date")||"");
+            const time=String(values.get("time")||"");
+            const [year,month,day]=date.split("-").map(Number);
+            const [hour,minute]=time.split(":").map(Number);
+            if(!date||!time||!Number.isInteger(hour)||!Number.isInteger(minute))throw new Error("Informe uma data e hora válidas.");
+            const target=Date.UTC(year,month-1,day,hour,minute);
+            let startAtMs=target;
+            for(let attempt=0;attempt<6;attempt++){
+              const parts=new Intl.DateTimeFormat("en-CA",{timeZone:tenantTimeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(startAtMs));
+              const get=type=>Number(parts.find(part=>part.type===type)?.value||0);
+              const represented=Date.UTC(get("year"),get("month")-1,get("day"),get("hour"),get("minute"));
+              const delta=target-represented;startAtMs+=delta;if(delta===0)break;
+            }
+            const check=new Intl.DateTimeFormat("en-CA",{timeZone:tenantTimeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(startAtMs));
+            const part=type=>check.find(item=>item.type===type)?.value||"";
+            if(part("year")!==String(year)||part("month")!==String(month).padStart(2,"0")||part("day")!==String(day).padStart(2,"0")||part("hour")!==String(hour).padStart(2,"0")||part("minute")!==String(minute).padStart(2,"0"))throw new Error("Este horário não existe no fuso horário da empresa devido à mudança de hora.");
+            const key=window.crypto?.randomUUID?window.crypto.randomUUID():("booking-"+Date.now()+"-"+Math.random().toString(36).slice(2,14));
+            await workspace.createAppointment({tenantId:tenant.tenantId,clientId:String(values.get("clientId")||""),serviceId:String(values.get("serviceId")||""),professionalId:String(values.get("professionalId")||""),startAtMs,idempotencyKey:key,notes:String(values.get("notes")||"")});
+            bookingStatus.textContent="Agendamento confirmado e guardado no Firebase.";
+            const refreshed=await dashboard.loadAgenda({tenantId:tenant.tenantId,startAtMs,endAtMs});
+            const tbody=data.querySelector(".firebase-readonly table tbody");
+            if(tbody){tbody.replaceChildren();refreshed.appointments.forEach(a=>{const tr=document.createElement("tr");[a.date,a.time,a.service,a.professional,a.status,money(a.priceMinor,a.currency)].forEach(value=>{const td=document.createElement("td");td.textContent=value;tr.append(td);});tbody.append(tr);});}
+            bookingForm.elements.notes.value="";
+          }catch(error){bookingStatus.textContent="Não foi possível confirmar: "+(error.message||"erro desconhecido");}
+          finally{submit.disabled=false;}
+        });
+      }
       if (["owner","admin"].includes(tenant.role) && workspace?.getCatalogForManagement && workspace?.saveCatalogItem) {
         const panel=document.createElement("section");
         panel.className="firebase-readonly-section firebase-management";
@@ -330,6 +383,9 @@
 
   const managementStyle=document.createElement("style");
   managementStyle.textContent='.firebase-management [hidden]{display:none!important}.firebase-management>p{color:#64748b}.firebase-management-status{padding:10px 12px;background:#f1f5f9;border-radius:9px;margin:12px 0;color:#334155;font-size:13px}.firebase-management-list{display:grid;grid-template-columns:1fr 1fr;gap:16px}.firebase-management-group h3,.firebase-management-form h3{font-size:15px;margin:10px 0}.firebase-management-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #e5e7eb}.firebase-management-row strong,.firebase-management-row span,.firebase-management-row small{display:block}.firebase-management-row span,.firebase-management-row small{font-size:12px;color:#64748b;margin-top:3px}.firebase-management-row-actions,.firebase-management-actions{display:flex;gap:8px;flex-wrap:wrap}.firebase-management-form{border-top:1px solid #e5e7eb;margin-top:18px;padding-top:18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.firebase-management-form h3{grid-column:1/-1}.firebase-management-form label{display:grid;gap:6px;font-size:13px;color:#475569}.firebase-management-form input,.firebase-management-form select{min-width:0;width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.firebase-management-actions{grid-column:1/-1}.firebase-management button:disabled{opacity:.55;cursor:wait}@media(max-width:700px){.firebase-management-list{grid-template-columns:1fr}.firebase-management-form{grid-template-columns:1fr}.firebase-management-row{align-items:flex-start;flex-direction:column}}';
+  const appointmentStyle=document.createElement("style");
+  appointmentStyle.textContent='.firebase-appointment-form>p{color:#64748b}.firebase-appointment-form form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.firebase-appointment-form label{display:grid;gap:6px;font-size:13px;color:#475569}.firebase-appointment-form input,.firebase-appointment-form select,.firebase-appointment-form textarea{width:100%;min-width:0;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.firebase-appointment-form label:nth-of-type(6),.firebase-appointment-actions{grid-column:1/-1}.firebase-appointment-status{padding:10px 12px;background:#f1f5f9;border-radius:9px;margin:12px 0;color:#334155;font-size:13px}.firebase-appointment-form button:disabled{opacity:.55;cursor:wait}@media(max-width:700px){.firebase-appointment-form form{grid-template-columns:1fr}}';
+  document.head.append(appointmentStyle);
   const clientStyle=document.createElement("style");
   clientStyle.textContent='.firebase-client-management>p{color:#64748b}.firebase-client-list{display:grid;grid-template-columns:1fr 1fr;gap:10px}.firebase-client-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid #e5e7eb;border-radius:10px}.firebase-client-row strong,.firebase-client-row span,.firebase-client-row small{display:block}.firebase-client-row span,.firebase-client-row small{font-size:12px;color:#64748b;margin-top:4px;overflow-wrap:anywhere}.firebase-client-row-actions,.firebase-client-actions{display:flex;gap:8px;flex-wrap:wrap}.firebase-client-status{padding:10px 12px;background:#f1f5f9;border-radius:9px;margin:12px 0;color:#334155;font-size:13px}.firebase-client-form{border-top:1px solid #e5e7eb;margin-top:18px;padding-top:18px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.firebase-client-form h3,.firebase-client-form label:nth-of-type(4),.firebase-client-actions{grid-column:1/-1}.firebase-client-form label{display:grid;gap:6px;font-size:13px;color:#475569}.firebase-client-form input,.firebase-client-form textarea{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.firebase-client-management button:disabled{opacity:.55;cursor:wait}@media(max-width:700px){.firebase-client-list,.firebase-client-form{grid-template-columns:1fr}.firebase-client-row{align-items:flex-start;flex-direction:column}}';
   document.head.append(clientStyle);
