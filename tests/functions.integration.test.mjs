@@ -814,3 +814,51 @@ test("cancelAppointment validates document IDs and serializes simultaneous cance
     doc.data().resourceId === appointmentId && doc.data().action === "appointment.cancelled");
   assert.equal(events.length, 1, "Cancelamentos simultâneos devem gerar somente um evento de auditoria.");
 });
+
+test("tenant client directory creates, lists, updates and validates private client records", async () => {
+  const created = await callable("saveTenantClient", {
+    tenantId, name: "Maria Cliente", email: "MARIA@example.test",
+    phone: "+48 500 600 700", notes: "Preferência de horário"
+  });
+  assert.equal(created.data.result?.ok, true, JSON.stringify(created.data));
+  const clientId = created.data.result.clientId;
+  assert.ok(clientId);
+
+  const listed = await callable("getTenantClients", { tenantId });
+  assert.equal(listed.data.result?.ok, true, JSON.stringify(listed.data));
+  const client = listed.data.result.clients.find(item => item.id === clientId);
+  assert.equal(client.name, "Maria Cliente");
+  assert.equal(client.email, "maria@example.test");
+  assert.equal(client.phone, "+48 500 600 700");
+  assert.equal(client.notes, "Preferência de horário");
+
+  const updated = await callable("saveTenantClient", {
+    tenantId, clientId, name: "Maria Silva", email: "maria@example.test",
+    phone: "+48 500 600 701", notes: "Atualizado", active: false
+  });
+  assert.equal(updated.data.result?.ok, true, JSON.stringify(updated.data));
+  assert.equal(updated.data.result.status, "inactive");
+
+  const afterUpdate = await callable("getTenantClients", { tenantId });
+  const saved = afterUpdate.data.result.clients.find(item => item.id === clientId);
+  assert.equal(saved.name, "Maria Silva");
+  assert.equal(saved.status, "inactive");
+
+  const invalid = await callable("saveTenantClient", {
+    tenantId, name: "X", email: "not-an-email"
+  });
+  assert.equal(invalid.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(invalid.data));
+
+  const missing = await callable("saveTenantClient", {
+    tenantId, clientId: "does-not-exist", name: "Cliente válido"
+  });
+  assert.equal(missing.data.error?.status, "NOT_FOUND", JSON.stringify(missing.data));
+});
+
+test("tenant client directory rejects unauthenticated and cross-tenant access", async () => {
+  const unauthenticated = await callable("getTenantClients", { tenantId }, null);
+  assert.equal(unauthenticated.data.error?.status, "UNAUTHENTICATED", JSON.stringify(unauthenticated.data));
+
+  const outsider = await callable("getTenantClients", { tenantId: "tenant-not-owned" });
+  assert.equal(outsider.data.error?.status, "PERMISSION_DENIED", JSON.stringify(outsider.data));
+});
