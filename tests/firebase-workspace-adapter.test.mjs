@@ -192,3 +192,26 @@ test("Firebase workspace blocks invitation acceptance for unverified or invalid 
   );
   assert.equal(callableCount, 0);
 });
+
+
+test("Firebase workspace reads a bounded schedule for the selected tenant", async () => {
+  const calls = [];
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async (payload) => {
+        calls.push({ name, payload });
+        return { data: name === "getSession"
+          ? { tenants: [{ tenantId: "tenant-schedule", name: "Empresa" }] }
+          : { ok: true, companySchedule: { "1": [] } } };
+      };
+    }
+  });
+  const result = await adapter.getSchedule({ startDate: "2026-10-01", endDate: "2026-10-31" });
+  assert.equal(result.ok, true);
+  assert.equal(calls.at(-1).name, "getTenantSchedule");
+  assert.equal(calls.at(-1).payload.tenantId, "tenant-schedule");
+  assert.equal(calls.at(-1).payload.startDate, "2026-10-01");
+  await assert.rejects(adapter.getSchedule({ startDate: "2026-01-01", endDate: "2026-04-15" }), /até 90 dias/);
+});

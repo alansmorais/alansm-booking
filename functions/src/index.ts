@@ -761,6 +761,55 @@ export const saveScheduleBlock = onCall(
 );
 
 
+
+type TenantScheduleReadInput = { tenantId?: unknown; startDate?: unknown; endDate?: unknown };
+
+/** Read the selected tenant's schedules and bounded availability exceptions. */
+export const getTenantSchedule = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 20 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as TenantScheduleReadInput;
+    const tenantId = cleanText(input.tenantId, 128);
+    const startDate = input.startDate;
+    const endDate = input.endDate;
+    await requireTenantReader(auth.uid, tenantId);
+    if (!isLocalDate(startDate) || !isLocalDate(endDate) || endDate < startDate) {
+      throw new HttpsError("invalid-argument", "Informe um período válido para consultar os horários.");
+    }
+    const first = new Date(startDate + "T00:00:00.000Z").getTime();
+    const last = new Date(endDate + "T00:00:00.000Z").getTime();
+    if (Math.round((last - first) / 86400000) > 90) {
+      throw new HttpsError("invalid-argument", "Consulte no máximo 90 dias de horários.");
+    }
+    const base = `tenants/${tenantId}`;
+    const [company, professionals, blocks, exceptions, professionalExceptions] = await Promise.all([
+      db.doc(`${base}/scheduleSettings/company`).get(),
+      db.collection(`${base}/scheduleSettings`).get(),
+      db.collection(`${base}/blocks`).where("date", ">=", startDate).where("date", "<=", endDate).limit(500).get(),
+      db.collection(`${base}/scheduleExceptions`).where("date", ">=", startDate).where("date", "<=", endDate).limit(500).get(),
+      db.collection(`${base}/professionalExceptions`).where("date", ">=", startDate).where("date", "<=", endDate).limit(1000).get()
+    ]);
+    const safeRecord = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+      const value = doc.data();
+      return { id: doc.id, date: cleanText(value.date, 10), start: cleanText(value.start, 5),
+        end: cleanText(value.end, 5), professionalId: cleanText(value.professionalId, 128),
+        reason: cleanText(value.reason, 240), kind: cleanText(value.kind, 30) };
+    };
+    const professionalSchedules: Record<string, unknown> = {};
+    professionals.docs.forEach((doc) => {
+      if (doc.id.startsWith("professional_")) {
+        professionalSchedules[doc.id.slice("professional_".length)] = doc.data().days || {};
+      }
+    });
+    return { ok: true, timezone: cleanText(company.data()?.timezone, 80),
+      companySchedule: company.data()?.days || {}, professionalSchedules,
+      blocks: blocks.docs.map(safeRecord), exceptions: exceptions.docs.map(safeRecord),
+      professionalExceptions: professionalExceptions.docs.map(safeRecord),
+      truncated: blocks.size === 500 || exceptions.size === 500 || professionalExceptions.size === 1000 };
+  }
+);
+
 type TenantReadInput = { tenantId?: unknown; startAtMs?: unknown; endAtMs?: unknown; professionalId?: unknown };
 
 /** Shared read authorization: tenantId locates data but never grants access. */

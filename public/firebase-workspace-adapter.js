@@ -118,6 +118,18 @@
       async getCatalog({ tenantId } = {}) {
         return invoke("getTenantCatalog", { tenantId: await requireSelectedTenant(tenantId) });
       },
+      async getSchedule({ tenantId, startDate, endDate } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        const validDate = (value) => typeof value === "string" &&
+          /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&
+          Number.isFinite(Date.parse(value + "T00:00:00Z")) &&
+          new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value;
+        if (!validDate(startDate) || !validDate(endDate) || endDate < startDate ||
+            Date.parse(endDate + "T00:00:00Z") - Date.parse(startDate + "T00:00:00Z") > 90 * 86400000) {
+          throw new Error("Informe um período válido de até 90 dias para os horários.");
+        }
+        return invoke("getTenantSchedule", { tenantId: id, startDate, endDate });
+      },
       async getAgenda({ tenantId, startAtMs, endAtMs, professionalId = "" } = {}) {
         const id = await requireSelectedTenant(tenantId);
         if (!Number.isSafeInteger(startAtMs) || !Number.isSafeInteger(endAtMs) ||
