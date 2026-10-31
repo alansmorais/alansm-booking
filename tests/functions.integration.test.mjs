@@ -481,3 +481,38 @@ test("cancelAppointment rejects staff and does not modify another tenant appoint
   }, signin.data.idToken);
   assert.equal(staffDenied.data.error?.status, "PERMISSION_DENIED", JSON.stringify(staffDenied.data));
 });
+
+
+test("staff cannot change company hours, schedule exceptions or time blocks", async () => {
+  const staffUid = `staff-schedule-${Date.now()}`;
+  await adminAuth.createUser({
+    uid: staffUid, email: `${staffUid}@example.test`,
+    password: "Test-password-123!", emailVerified: true
+  });
+  await adminDb.doc(`tenants/${tenantId}/members/${staffUid}`).set({
+    uid: staffUid, tenantId, role: "staff", status: "active"
+  });
+  const customToken = await adminAuth.createCustomToken(staffUid);
+  const signin = await jsonRequest(`${AUTH}/accounts:signInWithCustomToken?key=fake-api-key`, {
+    token: customToken, returnSecureToken: true
+  });
+  assert.equal(signin.status, 200, JSON.stringify(signin.data));
+
+  const days = { "1": [{ start: "09:00", end: "17:00", breaks: [] }] };
+  const hours = await callable("saveScheduleSettings", {
+    tenantId, scope: "company", days
+  }, signin.data.idToken);
+  assert.equal(hours.data.error?.status, "PERMISSION_DENIED", JSON.stringify(hours.data));
+
+  const date = new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10);
+  const exception = await callable("saveScheduleException", {
+    tenantId, kind: "companyClosure", startDate: date, endDate: date,
+    reason: "Teste de permissão"
+  }, signin.data.idToken);
+  assert.equal(exception.data.error?.status, "PERMISSION_DENIED", JSON.stringify(exception.data));
+
+  const block = await callable("saveScheduleBlock", {
+    tenantId, date, start: "12:00", end: "13:00", reason: "Teste de permissão"
+  }, signin.data.idToken);
+  assert.equal(block.data.error?.status, "PERMISSION_DENIED", JSON.stringify(block.data));
+});
