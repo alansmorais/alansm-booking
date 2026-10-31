@@ -420,6 +420,20 @@ test("createAppointment enforces idempotency and prevents overlapping concurrent
   assert.equal(failures.length, 1, JSON.stringify(attempts.map((item) => item.data)));
   assert.ok(["ALREADY_EXISTS", "ABORTED"].includes(failures[0].data.error?.status),
     JSON.stringify(failures[0].data));
+
+  // The backend must reject a direct callable request outside company hours.
+  const closedDays = Object.fromEntries(Array.from({ length: 7 }, (_, day) => [String(day), []]));
+  await adminDb.doc(`${base}/scheduleSettings/company`).set({ tenantId, days: closedDays });
+  const outsideHours = await callable("createAppointment", {
+    ...payload,
+    startAtMs: startAtMs + 6 * 60 * 60 * 1000,
+    idempotencyKey: `outside-hours-${Date.now()}`
+  });
+  assert.equal(outsideHours.data.error?.status, "FAILED_PRECONDITION", JSON.stringify(outsideHours.data));
+  const outsideHoursAppointments = await adminDb.collection(`${base}/appointments`)
+    .where("idempotencyKey", "==", "not-stored")
+    .get();
+  assert.equal(outsideHoursAppointments.size, 0);
 });
 
 
