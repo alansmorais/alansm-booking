@@ -450,6 +450,12 @@ test("createAppointment enforces idempotency and prevents overlapping concurrent
   const makeOpenDays = () => Object.fromEntries(Array.from({ length: 7 }, (_, day) => [
     String(day), [{ start: "00:00", end: "23:59", breaks: [] }]
   ]));
+  const assertNoAppointmentAt = async (startMs, message) => {
+    const snapshot = await adminDb.collection(`${base}/appointments`)
+      .where("startAt", "==", new Date(startMs))
+      .get();
+    assert.equal(snapshot.size, 0, message);
+  };
 
   const breakStart = startAtMs + 8 * 60 * 60 * 1000;
   const breakLocal = localParts(breakStart);
@@ -472,12 +478,14 @@ test("createAppointment enforces idempotency and prevents overlapping concurrent
   });
   assert.equal(duringBreak.data.error?.status, "FAILED_PRECONDITION", JSON.stringify(duringBreak.data));
 
+  await assertNoAppointmentAt(breakStart, "Uma reserva durante a pausa não deve ser gravada.");
+
   // A company-wide time block must reject a direct booking request.
   const blockStart = startAtMs + 10 * 60 * 60 * 1000;
   const blockLocal = localParts(blockStart);
   const blockDate = `${blockLocal.year}-${blockLocal.month}-${blockLocal.day}`;
   const blockCreated = await callable("saveScheduleBlock", {
-    tenantId, date: blockDate,
+    tenantId, date: blockDate, professionalId,
     start: clock(Number(blockLocal.hour), Number(blockLocal.minute)),
     end: clock(Math.floor((Number(blockLocal.hour) * 60 + Number(blockLocal.minute) + 30) / 60),
       (Number(blockLocal.hour) * 60 + Number(blockLocal.minute) + 30) % 60),
@@ -492,6 +500,8 @@ test("createAppointment enforces idempotency and prevents overlapping concurrent
   });
   assert.equal(duringBlock.data.error?.status, "ALREADY_EXISTS", JSON.stringify(duringBlock.data));
 
+  await assertNoAppointmentAt(blockStart, "Uma reserva durante o bloqueio do profissional não deve ser gravada.");
+
   // A professional absence must reject bookings only for that professional.
   const absenceStart = startAtMs + 12 * 60 * 60 * 1000;
   const absenceLocal = localParts(absenceStart);
@@ -505,6 +515,7 @@ test("createAppointment enforces idempotency and prevents overlapping concurrent
     ...payload, startAtMs: absenceStart, idempotencyKey: `during-absence-${Date.now()}`
   });
   assert.equal(duringAbsence.data.error?.status, "FAILED_PRECONDITION", JSON.stringify(duringAbsence.data));
+  await assertNoAppointmentAt(absenceStart, "Uma reserva durante a ausência profissional não deve ser gravada.");
 });
 
 
