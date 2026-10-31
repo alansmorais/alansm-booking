@@ -22,6 +22,8 @@
   let onboarding = null;
   let firebaseMode = false;
   let firebaseModeName = "Firebase";
+  let invitationLink = { status: "none" };
+  let invitationAccepted = false;
 
   function notify(message) {
     const toast = document.getElementById("toast");
@@ -119,6 +121,23 @@
 
   async function showVerifiedAccount() {
     const user = firebaseAuth.getCurrentUser();
+    if (invitationLink.status === "ready" && !invitationAccepted) {
+      try {
+        const flow = window.BookingInvitation.createInvitationFlow({ auth: firebaseAuth, workspace: firebaseWorkspace });
+        const accepted = await flow.accept(invitationLink);
+        if (accepted.status !== "accepted") throw new Error("Confirme o e-mail antes de aceitar o convite.");
+        invitationAccepted = true;
+        notify("Convite aceite. A empresa foi adicionada à sua conta.");
+      } catch (error) {
+        showFirebaseStatus("Convite não aceite", error.message || "Não foi possível aceitar o convite.", [{
+          label: "Tentar novamente", action: showVerifiedAccount
+        }, {
+          label: "Terminar sessão", secondary: true,
+          action: async () => { await firebaseAuth.signOut(); showAuthForms(); }
+        }]);
+        return;
+      }
+    }
     const session = await firebaseWorkspace.getSession();
     const tenants = Array.isArray(session.tenants) ? session.tenants : [];
     if (!tenants.length) {
@@ -269,6 +288,21 @@
     }
     const values = readRegistration();
     try {
+      if (invitationLink.status === "ready") {
+        await firebaseAuth.register({ email: values.email, password: values.password, displayName: values.displayName });
+        await firebaseAuth.sendEmailVerification();
+        showFirebaseStatus("Conta criada · confirme o e-mail", "A conta foi criada. Confirme o endereço de e-mail e volte a este link para aceitar o convite. Não será criada uma empresa nova.", [{
+          label: "Já confirmei o e-mail",
+          action: async () => {
+            try {
+              const refreshed = await firebaseAuth.reloadCurrentUser();
+              if (!refreshed?.emailVerified) throw new Error("O e-mail ainda não foi confirmado.");
+              await showVerifiedAccount();
+            } catch (error) { notify(error.message); }
+          }
+        }]);
+        return;
+      }
       const currentUser = firebaseAuth.getCurrentUser();
       const result = currentUser?.emailVerified
         ? await onboarding.completeAfterVerification(values)
@@ -293,11 +327,11 @@
     } catch (error) { notify(error.message || "Não foi possível criar a conta."); }
   });
 
-  window.BookingInvitationPage?.mount({
+  invitationLink = window.BookingInvitationPage?.mount({
     gate,
     search: window.location.search,
     onChooseAccess: selectTab
-  });
+  }) || { status: "none" };
 
   selectTab("login");
   let mode = null;
