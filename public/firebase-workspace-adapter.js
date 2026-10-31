@@ -236,6 +236,26 @@
           throw new Error("Data ou horário do bloqueio inválido.");
         }
         return invoke("saveScheduleBlock", { tenantId: id, ...(blockId ? { blockId } : {}), date, start, end, ...(professionalId ? { professionalId } : {}), reason: String(reason).trim().slice(0, 240) });
+      },
+      async getClients({ tenantId } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        return invoke("getTenantClients", { tenantId: id });
+      },
+      async saveClient({ tenantId, clientId = "", name, email = "", phone = "", notes = "", active = true } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        const normalizedName = String(name || "").trim();
+        const normalizedEmail = String(email || "").trim().toLowerCase();
+        const normalizedPhone = String(phone || "").trim();
+        const normalizedNotes = String(notes || "").trim();
+        if (normalizedName.length < 2 || normalizedName.length > 100) throw new Error("Informe um nome entre 2 e 100 caracteres.");
+        if (normalizedEmail && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) throw new Error("Informe um e-mail válido.");
+        if (normalizedPhone.length > 40 || normalizedNotes.length > 500) throw new Error("Contacto ou observações demasiado longos.");
+        if (typeof active !== "boolean") throw new Error("Estado do cliente inválido.");
+        return invoke("saveTenantClient", {
+          tenantId: id, ...(clientId ? { clientId: String(clientId).trim() } : {}),
+          name: normalizedName, email: normalizedEmail, phone: normalizedPhone,
+          notes: normalizedNotes, active
+        });
       }
     });
   }
