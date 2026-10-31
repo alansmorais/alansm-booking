@@ -748,7 +748,6 @@ export const saveScheduleBlock = onCall(
     const audit = db.collection(`tenants/${tenantId}/auditLog`).doc();
     const now = FieldValue.serverTimestamp();
     await db.runTransaction(async (tx) => {
-      if (blockId && !(await tx.get(ref)).exists) throw new HttpsError("not-found", "Bloqueio não encontrado.");
       const existing = blockId ? await tx.get(ref) : null;
       if (blockId && !existing?.exists) throw new HttpsError("not-found", "Bloqueio não encontrado.");
       tx.set(ref, { tenantId, date, start: input.start, end: input.end,
