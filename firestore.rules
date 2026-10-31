@@ -40,15 +40,15 @@ service cloud.firestore {
       }
 
       match /clients/{clientId} {
-        allow read: if hasRole(tenantId, ['owner', 'admin', 'staff']);
-        allow write: if false;
+        // Client contact records are available only through role-checked server APIs.
+        // Do not expose the full client collection to browser queries.
+        allow read, write: if false;
       }
 
       match /appointments/{appointmentId} {
-        allow read: if activeMember(tenantId);
-        // Appointment writes must pass through trusted server code:
-        // authorization, tenant checks, availability, transactions and idempotency.
-        allow write: if false;
+        // Agenda data is returned through bounded, sanitized callable Functions.
+        // Direct reads could expose client identifiers, notes and contact metadata.
+        allow read, write: if false;
       }
 
       match /blocks/{blockId} {
