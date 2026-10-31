@@ -118,6 +118,27 @@
       async getCatalog({ tenantId } = {}) {
         return invoke("getTenantCatalog", { tenantId: await requireSelectedTenant(tenantId) });
       },
+      async saveCatalogItem({ tenantId, kind, itemId = "", name, durationMinutes, priceMinor, currency, color, status = "active" } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        if (!["service", "professional"].includes(kind)) throw new Error("Tipo de cadastro inválido.");
+        if (!["active", "inactive"].includes(status)) throw new Error("Estado do cadastro inválido.");
+        const normalizedName = String(name || "").trim();
+        if (status === "active" && normalizedName.length < 2) throw new Error("Informe um nome válido.");
+        const payload = { tenantId: id, kind, status, ...(itemId ? { itemId: String(itemId) } : {}) };
+        if (normalizedName) payload.name = normalizedName;
+        if (kind === "service" && status === "active") {
+          if (!Number.isInteger(durationMinutes) || durationMinutes < 5 || durationMinutes > 480 || durationMinutes % 5 !== 0 ||
+              !Number.isSafeInteger(priceMinor) || priceMinor < 0 || !/^[A-Z]{3}$/.test(String(currency || ""))) {
+            throw new Error("Duração, preço ou moeda do serviço inválidos.");
+          }
+          Object.assign(payload, { durationMinutes, priceMinor, currency: String(currency).toUpperCase() });
+        }
+        if (kind === "professional" && color !== undefined) {
+          if (!/^#[0-9a-fA-F]{6}$/.test(String(color))) throw new Error("Cor inválida.");
+          payload.color = String(color);
+        }
+        return invoke("saveCatalogItem", payload);
+      },
       async getAgenda({ tenantId, startAtMs, endAtMs, professionalId = "" } = {}) {
         const id = await requireSelectedTenant(tenantId);
         if (!Number.isSafeInteger(startAtMs) || !Number.isSafeInteger(endAtMs) ||
