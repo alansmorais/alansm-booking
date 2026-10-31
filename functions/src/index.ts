@@ -762,6 +762,116 @@ export const saveScheduleBlock = onCall(
 
 
 
+
+type SaveTenantCatalogItemInput = {
+  tenantId?: unknown; kind?: unknown; itemId?: unknown; name?: unknown;
+  durationMinutes?: unknown; priceMinor?: unknown; currency?: unknown;
+  color?: unknown; active?: unknown;
+};
+
+/**
+ * Owner/admin catalog management. IDs are generated server-side and records
+ * are deactivated rather than deleted so historical appointments stay intact.
+ */
+export const saveTenantCatalogItem = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 10 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as SaveTenantCatalogItemInput;
+    const tenantId = cleanText(input.tenantId, 128);
+    const kind = cleanText(input.kind, 20);
+    const itemId = cleanText(input.itemId, 128);
+    const name = cleanText(input.name, 100);
+    if (!validDocumentId(tenantId) || !["service", "professional"].includes(kind)) {
+      throw new HttpsError("invalid-argument", "Empresa ou tipo de cadastro inválido.");
+    }
+    await requireTenantManager(auth.uid, tenantId);
+    const isService = kind === "service";
+    const collection = isService ? "services" : "professionals";
+    const ref = itemId
+      ? db.doc(`tenants/${tenantId}/${collection}/${itemId}`)
+      : db.collection(`tenants/${tenantId}/${collection}`).doc();
+    const audit = db.collection(`tenants/${tenantId}/auditLog`).doc();
+    const now = FieldValue.serverTimestamp();
+
+    if (input.active === false) {
+      if (!itemId) throw new HttpsError("invalid-argument", "Identificador obrigatório para desativar.");
+      await db.runTransaction(async (tx) => {
+        const existing = await tx.get(ref);
+        if (!existing.exists) throw new HttpsError("not-found", "Cadastro não encontrado.");
+        if (existing.data()?.status === "inactive") return;
+        tx.update(ref, { status: "inactive", updatedAt: now, updatedBy: auth.uid });
+        tx.create(audit, { tenantId, actorUid: auth.uid,
+          action: `${kind}.deactivated`, resourceType: kind, resourceId: itemId, createdAt: now });
+      });
+      return { ok: true, itemId, status: "inactive" };
+    }
+
+    if (name.length < 2) throw new HttpsError("invalid-argument", "Informe um nome válido.");
+    let payload: Record<string, unknown>;
+    if (isService) {
+      const duration = input.durationMinutes, price = input.priceMinor;
+      const currency = cleanText(input.currency, 3).toUpperCase();
+      if (!Number.isInteger(duration) || (duration as number) < SLOT_MINUTES ||
+          (duration as number) > MAX_SERVICE_MINUTES || (duration as number) % SLOT_MINUTES !== 0 ||
+          !Number.isSafeInteger(price) || (price as number) < 0 || !validCurrency(currency)) {
+        throw new HttpsError("invalid-argument", "Duração, preço ou moeda do serviço inválidos.");
+      }
+      payload = { name, durationMinutes: duration, priceMinor: price, currency, status: "active" };
+    } else {
+      const color = cleanText(input.color || "#2563EB", 20);
+      if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+        throw new HttpsError("invalid-argument", "A cor do profissional deve estar no formato hexadecimal.");
+      }
+      payload = { name, color, status: "active" };
+    }
+
+    await db.runTransaction(async (tx) => {
+      if (itemId && !(await tx.get(ref)).exists) {
+        throw new HttpsError("not-found", "Cadastro não encontrado.");
+      }
+      tx.set(ref, { ...payload, tenantId,
+        ...(itemId ? {} : { createdAt: now, createdBy: auth.uid }),
+        updatedAt: now, updatedBy: auth.uid }, { merge: true });
+      tx.create(audit, { tenantId, actorUid: auth.uid,
+        action: itemId ? `${kind}.updated` : `${kind}.created`,
+        resourceType: kind, resourceId: ref.id, createdAt: now });
+    });
+    return { ok: true, itemId: ref.id, status: "active" };
+  }
+);
+
+/** Admin-only catalog list includes inactive items for management screens. */
+export const getTenantCatalogForManagement = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 10 },
+  async (request) => {
+    const auth = requireUser(request);
+    const tenantId = cleanText((request.data || {}).tenantId, 128);
+    await requireTenantManager(auth.uid, tenantId);
+    const [professionals, services] = await Promise.all([
+      db.collection(`tenants/${tenantId}/professionals`).limit(100).get(),
+      db.collection(`tenants/${tenantId}/services`).limit(200).get()
+    ]);
+    return {
+      ok: true,
+      professionals: professionals.docs.map((doc) => {
+        const value = doc.data();
+        return { id: doc.id, name: cleanText(value.name, 100),
+          status: value.status === "active" ? "active" : "inactive",
+          color: cleanText(value.color, 20) };
+      }),
+      services: services.docs.map((doc) => {
+        const value = doc.data();
+        return { id: doc.id, name: cleanText(value.name, 100),
+          status: value.status === "active" ? "active" : "inactive",
+          durationMinutes: Number.isInteger(value.durationMinutes) ? value.durationMinutes : null,
+          priceMinor: Number.isSafeInteger(value.priceMinor) ? value.priceMinor : null,
+          currency: /^[A-Z]{3}$/.test(value.currency) ? value.currency : null };
+      })
+    };
+  }
+);
+
 type TenantScheduleReadInput = { tenantId?: unknown; startDate?: unknown; endDate?: unknown };
 
 /** Read the selected tenant's schedules and bounded availability exceptions. */
