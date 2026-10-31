@@ -10,7 +10,7 @@
     "test:auth-adapter": "node --test tests/auth-adapter.test.mjs",
     "test:workspace-adapter": "node --test tests/workspace-adapter.test.mjs",
     "test:onboarding": "node --test tests/onboarding-flow.test.mjs",
-    "test:firebase-adapters": "node --test tests/firebase-init.test.mjs tests/firebase-auth-adapter.test.mjs tests/firebase-workspace-adapter.test.mjs",
+    "test:firebase-adapters": "node --test tests/firebase-init.test.mjs tests/firebase-auth-adapter.test.mjs tests/firebase-workspace-adapter.test.mjs tests/firebase-auth-ui.test.mjs",
     "test:invitation": "node --test tests/invitation-flow.test.mjs",
     "test:invitation-page": "node --test tests/invitation-page.test.mjs",
     "test:team": "node --test tests/team.test.mjs",
