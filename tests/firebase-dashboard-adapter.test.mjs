@@ -65,3 +65,31 @@ test("Firebase dashboard converts appointment timestamps in the tenant timezone 
   assert.equal(result.appointments[0].professional, "Ana");
   assert.equal(result.appointments[0].service, "Corte");
 });
+
+
+test("Firebase dashboard adopts the timezone returned by the tenant schedule before loading agenda", async () => {
+  const adapter = window.BookingFirebaseDashboard.createFirebaseDashboardAdapter({
+    timeZone: "UTC",
+    workspace: {
+      mode: "firebase",
+      getCatalog: async () => ({
+        professionals: [{ id: "pro-1", name: "Ana", status: "active" }],
+        services: [{ id: "svc-1", name: "Corte", status: "active" }]
+      }),
+      getSchedule: async () => ({ timezone: "Europe/Warsaw" }),
+      getAgenda: async () => ({
+        appointments: [{
+          id: "a1", professionalId: "pro-1", serviceId: "svc-1",
+          startAtMs: Date.parse("2026-11-02T09:00:00Z"),
+          endAtMs: Date.parse("2026-11-02T09:30:00Z"),
+          status: "booked"
+        }]
+      })
+    }
+  });
+  await adapter.loadCatalog();
+  await adapter.loadSchedule({ startDate: "2026-11-02", endDate: "2026-11-08" });
+  const result = await adapter.loadAgenda({ startAtMs: 1, endAtMs: 2 });
+  assert.equal(result.appointments[0].time, "10:00");
+  assert.equal(result.appointments[0].date, "2026-11-02");
+});
