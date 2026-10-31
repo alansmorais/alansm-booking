@@ -57,3 +57,13 @@ test("Firebase catalog screens expose create edit and deactivate actions", async
   assert.match(app, /itemId:String\(values\.get\("itemId"\)\|\|""\)/);
   assert.match(app, /status:"inactive"/);
 });
+
+test("Firebase clients screen uses tenant-scoped private client APIs", async () => {
+  const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(app, /firebaseWorkspaceAdapter\.getClients/);
+  assert.match(app, /firebaseWorkspaceAdapter\.saveClient/);
+  assert.match(app, /id="firebaseClientForm"/);
+  assert.match(app, /data-action="edit-client"/);
+  assert.match(app, /data-action="deactivate-client"/);
+  assert.match(app, /Dados de contacto privados da empresa/);
+});
