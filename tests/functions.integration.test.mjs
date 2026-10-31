@@ -348,3 +348,59 @@ test("staff cannot create invitations or manage members", async () => {
   }, signedIn.data.idToken);
   assert.notEqual(result.data.result?.ok, true);
 });
+
+
+test("createAppointment enforces idempotency and prevents overlapping concurrent bookings", async () => {
+  const professionalId = "booking-test-professional";
+  const serviceId = "booking-test-service";
+  const clientId = "booking-test-client";
+  const days = Object.fromEntries(Array.from({ length: 7 }, (_, day) => [
+    String(day), [{ start: "00:00", end: "23:59", breaks: [] }]
+  ]));
+  const base = `tenants/${tenantId}`;
+  await Promise.all([
+    adminDb.doc(`${base}/professionals/${professionalId}`).set({
+      tenantId, name: "Profissional de teste", status: "active"
+    }),
+    adminDb.doc(`${base}/services/${serviceId}`).set({
+      tenantId, name: "Serviço de teste", status: "active",
+      durationMinutes: 60, priceMinor: 5000, currency: "PLN"
+    }),
+    adminDb.doc(`${base}/clients/${clientId}`).set({
+      tenantId, name: "Cliente de teste"
+    }),
+    adminDb.doc(`${base}/scheduleSettings/company`).set({ tenantId, days }),
+    adminDb.doc(`${base}/scheduleSettings/professional_${professionalId}`).set({
+      tenantId, scope: "professional", professionalId, days
+    })
+  ]);
+
+  const startAtMs = Math.ceil((Date.now() + 48 * 60 * 60 * 1000) / 300000) * 300000;
+  const payload = {
+    tenantId, professionalId, serviceId, clientId, startAtMs,
+    notes: "Teste de idempotência", idempotencyKey: `booking-idem-${Date.now()}`
+  };
+  const first = await callable("createAppointment", payload);
+  assert.equal(first.data.result?.ok, true, JSON.stringify(first.data));
+  assert.equal(first.data.result.replayed, false);
+
+  const replay = await callable("createAppointment", payload);
+  assert.equal(replay.data.result?.ok, true, JSON.stringify(replay.data));
+  assert.equal(replay.data.result.appointmentId, first.data.result.appointmentId);
+  assert.equal(replay.data.result.replayed, true);
+
+  const concurrentStart = startAtMs + 2 * 60 * 60 * 1000;
+  const concurrentPayload = {
+    ...payload, startAtMs: concurrentStart, notes: "Concorrência"
+  };
+  const attempts = await Promise.all([
+    callable("createAppointment", { ...concurrentPayload, idempotencyKey: `parallel-a-${Date.now()}` }),
+    callable("createAppointment", { ...concurrentPayload, idempotencyKey: `parallel-b-${Date.now()}` })
+  ]);
+  const successes = attempts.filter((item) => item.data.result?.ok === true);
+  const failures = attempts.filter((item) => item.data.result?.ok !== true);
+  assert.equal(successes.length, 1, JSON.stringify(attempts.map((item) => item.data)));
+  assert.equal(failures.length, 1, JSON.stringify(attempts.map((item) => item.data)));
+  assert.ok(["ALREADY_EXISTS", "ABORTED"].includes(failures[0].data.error?.status),
+    JSON.stringify(failures[0].data));
+});
