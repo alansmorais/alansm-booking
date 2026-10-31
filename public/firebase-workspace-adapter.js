@@ -172,6 +172,70 @@
         return invoke("getAgendaAppointments", {
           tenantId: id, startAtMs, endAtMs, ...(professionalId ? { professionalId } : {})
         });
+      },
+      async saveScheduleSettings({ tenantId, scope = "company", professionalId = "", days } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        if (!["company", "professional"].includes(scope) ||
+            (scope === "professional" && !String(professionalId).trim())) {
+          throw new Error("Escopo ou profissional inválido.");
+        }
+        if (!days || typeof days !== "object" || Array.isArray(days) ||
+            Object.keys(days).some(key => !/^[0-6]$/.test(key))) {
+          throw new Error("Informe os horários da semana.");
+        }
+        const normalized = {};
+        for (let day = 0; day <= 6; day++) {
+          const periods = days[String(day)] ?? [];
+          if (!Array.isArray(periods) || periods.length > 2) throw new Error("Máximo de dois períodos por dia.");
+          let previousEnd = "";
+          normalized[String(day)] = periods.map(period => {
+            const start = String(period?.start || ""), end = String(period?.end || "");
+            const validTime = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+            if (!validTime(start) || !validTime(end) || start >= end || (previousEnd && start < previousEnd)) {
+              throw new Error("Horário de funcionamento inválido.");
+            }
+            previousEnd = end;
+            const breaks = Array.isArray(period.breaks) ? period.breaks : [];
+            if (breaks.length > 2) throw new Error("Máximo de dois intervalos por período.");
+            return { start, end, breaks: breaks.map(item => {
+              const bs = String(item?.start || ""), be = String(item?.end || "");
+              if (!validTime(bs) || !validTime(be) || bs >= be || bs < start || be > end) {
+                throw new Error("Intervalo inválido.");
+              }
+              return { start: bs, end: be };
+            }) };
+          });
+        }
+        return invoke("saveScheduleSettings", { tenantId: id, scope, ...(scope === "professional" ? { professionalId } : {}), days: normalized });
+      },
+      async saveScheduleException({ tenantId, kind, professionalId = "", startDate, endDate, reason = "" } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        const validDate = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+          Number.isFinite(Date.parse(value + "T00:00:00Z")) &&
+          new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value;
+        const last = endDate || startDate;
+        if (!["companyClosure", "professionalAbsence"].includes(kind) ||
+            (kind === "professionalAbsence" && !String(professionalId).trim()) ||
+            !validDate(startDate) || !validDate(last) || last < startDate ||
+            Date.parse(last + "T00:00:00Z") - Date.parse(startDate + "T00:00:00Z") > 89 * 86400000) {
+          throw new Error("Período de indisponibilidade inválido (máximo de 90 dias).");
+        }
+        return invoke("saveScheduleException", { tenantId: id, kind, ...(professionalId ? { professionalId } : {}), startDate, endDate: last, reason: String(reason).trim().slice(0, 240) });
+      },
+      async saveScheduleBlock({ tenantId, blockId = "", date, start, end, professionalId = "", reason = "", remove = false } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        const validDate = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+          Number.isFinite(Date.parse(value + "T00:00:00Z")) &&
+          new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value;
+        if (remove) {
+          if (!String(blockId).trim()) throw new Error("Identificador do bloqueio inválido.");
+          return invoke("saveScheduleBlock", { tenantId: id, blockId, date, remove: true });
+        }
+        const validTime = value => typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+        if (!validDate(date) || !validTime(start) || !validTime(end) || start >= end) {
+          throw new Error("Data ou horário do bloqueio inválido.");
+        }
+        return invoke("saveScheduleBlock", { tenantId: id, ...(blockId ? { blockId } : {}), date, start, end, ...(professionalId ? { professionalId } : {}), reason: String(reason).trim().slice(0, 240) });
       }
     });
   }
