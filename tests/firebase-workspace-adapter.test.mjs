@@ -219,3 +219,31 @@ test("Firebase workspace validates and invokes catalog maintenance", async () =>
   }), /Duração, preço ou moeda/);
   await assert.rejects(adapter.saveCatalogItem({ kind: "owner", name: "Inválido" }), /Tipo de cadastro/);
 });
+
+test("Firebase workspace validates and invokes tenant client operations", async () => {
+  const calls = [];
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async (payload) => {
+        calls.push({ name, payload });
+        if (name === "getSession") return { data: { tenants: [{ tenantId: "tenant-clients", name: "Empresa" }] } };
+        return { data: { ok: true, clientId: "client-1" } };
+      };
+    }
+  });
+  const saved = await adapter.saveClient({
+    name: "  Ana Silva ", phone: "+48 600 700 800",
+    email: " ANA@EXAMPLE.COM ", notes: "  Preferência manhã "
+  });
+  assert.equal(saved.clientId, "client-1");
+  const write = calls.find((item) => item.name === "saveTenantClient");
+  assert.equal(write.payload.tenantId, "tenant-clients");
+  assert.equal(write.payload.name, "Ana Silva");
+  assert.equal(write.payload.email, "ana@example.com");
+  assert.equal((await adapter.getClients()).ok, true);
+  assert.equal(calls.at(-1).name, "getTenantClients");
+  await assert.rejects(adapter.saveClient({ name: "A", email: "inválido" }), /nome do cliente/);
+  await assert.rejects(adapter.saveClient({ name: "Ana Silva", email: "inválido" }), /e-mail válido/);
+});
