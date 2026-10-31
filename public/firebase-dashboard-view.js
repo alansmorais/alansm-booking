@@ -3,8 +3,29 @@
   const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   }[char]));
-  const dateISO = (date) => date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");
-  const addDays = (date, amount) => { const next=new Date(date); next.setDate(next.getDate()+amount); return next; };
+  const dateInZone = (date, timeZone) => {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year:"numeric", month:"2-digit", day:"2-digit" }).formatToParts(date);
+    const get = (type) => parts.find((part) => part.type === type)?.value || "";
+    return get("year")+"-"+get("month")+"-"+get("day");
+  };
+  const shiftDate = (date, amount) => {
+    const [year,month,day] = date.split("-").map(Number);
+    return new Date(Date.UTC(year,month-1,day+amount)).toISOString().slice(0,10);
+  };
+  const tenantMidnight = (date, timeZone) => {
+    const [year,month,day] = date.split("-").map(Number);
+    const target = Date.UTC(year,month-1,day);
+    let guess = target;
+    for (let attempt=0; attempt<4; attempt++) {
+      const parts = new Intl.DateTimeFormat("en-CA", { timeZone, year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit", hourCycle:"h23" }).formatToParts(new Date(guess));
+      const get = (type) => Number(parts.find((part) => part.type === type)?.value || 0);
+      const represented = Date.UTC(get("year"),get("month")-1,get("day"),get("hour"),get("minute"),get("second"));
+      const delta = target-represented;
+      guess += delta;
+      if (delta === 0) break;
+    }
+    return guess;
+  };
   const money = (minor,currency) => Number.isSafeInteger(minor)&&currency
     ? new Intl.NumberFormat("pt-BR",{style:"currency",currency}).format(minor/100) : "—";
   async function mount({tenant,user,dashboard,onSignOut}={}) {
@@ -24,9 +45,9 @@
     const workspaceRole=document.getElementById("workspaceRole");
     if(workspaceName) workspaceName.textContent=tenant.name;
     if(workspaceRole) workspaceRole.textContent="Acesso: "+(tenant.role||"membro");
-    const today=new Date();
-    const end=addDays(today,6);
-    const startDate=dateISO(today), endDate=dateISO(end);
+    const tenantTimeZone=tenant.timezone||"UTC";
+    const startDate=dateInZone(new Date(),tenantTimeZone);
+    const endDate=shiftDate(startDate,6);
     content.innerHTML='<section class="firebase-readonly"><div class="firebase-readonly-head"><div><span class="firebase-readonly-kicker">DADOS AUTENTICADOS</span><h1>'+escape(tenant.name)+'</h1><p>Consulta segura · sem edição ou gravação nesta versão</p></div><button type="button" id="firebaseReadOnlySignOut" class="secondary-btn">Terminar sessão</button></div><div class="firebase-readonly-state" role="status">A carregar catálogo, horários e agenda da empresa…</div><div id="firebaseReadOnlyData"></div></section>';
     document.getElementById("firebaseReadOnlySignOut").addEventListener("click",onSignOut);
     const state=content.querySelector(".firebase-readonly-state");
@@ -34,8 +55,8 @@
     try {
       const catalog=await dashboard.loadCatalog({tenantId:tenant.tenantId});
       const schedule=await dashboard.loadSchedule({tenantId:tenant.tenantId,startDate,endDate});
-      const startAtMs=new Date(startDate+"T00:00:00").getTime();
-      const endAtMs=new Date(endDate+"T23:59:59.999").getTime();
+      const startAtMs=tenantMidnight(startDate,tenantTimeZone);
+      const endAtMs=tenantMidnight(shiftDate(endDate,1),tenantTimeZone);
       const agenda=await dashboard.loadAgenda({tenantId:tenant.tenantId,startAtMs,endAtMs});
       const appts=agenda.appointments||[];
       const professionals=catalog.professionals||[];
