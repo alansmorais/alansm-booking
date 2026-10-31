@@ -192,3 +192,30 @@ test("Firebase workspace blocks invitation acceptance for unverified or invalid 
   );
   assert.equal(callableCount, 0);
 });
+
+test("Firebase workspace validates and invokes catalog maintenance", async () => {
+  const calls = [];
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async (payload) => {
+        calls.push({ name, payload });
+        if (name === "getSession") return { data: { tenants: [{ tenantId: "tenant-catalog", name: "Empresa" }] } };
+        return { data: { ok: true, itemId: "service-1" } };
+      };
+    }
+  });
+  const saved = await adapter.saveCatalogItem({
+    kind: "service", name: "Corte", durationMinutes: 30, priceMinor: 5000, currency: "PLN"
+  });
+  assert.equal(saved.itemId, "service-1");
+  const call = calls.find((item) => item.name === "saveCatalogItem");
+  assert.equal(call.payload.tenantId, "tenant-catalog");
+  assert.equal(call.payload.kind, "service");
+  assert.equal(call.payload.priceMinor, 5000);
+  await assert.rejects(adapter.saveCatalogItem({
+    kind: "service", name: "Inválido", durationMinutes: 7, priceMinor: 10, currency: "PLN"
+  }), /Duração, preço ou moeda/);
+  await assert.rejects(adapter.saveCatalogItem({ kind: "owner", name: "Inválido" }), /Tipo de cadastro/);
+});
