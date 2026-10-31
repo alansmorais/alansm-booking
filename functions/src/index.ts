@@ -749,9 +749,12 @@ export const saveScheduleBlock = onCall(
     const now = FieldValue.serverTimestamp();
     await db.runTransaction(async (tx) => {
       if (blockId && !(await tx.get(ref)).exists) throw new HttpsError("not-found", "Bloqueio não encontrado.");
+      const existing = blockId ? await tx.get(ref) : null;
+      if (blockId && !existing?.exists) throw new HttpsError("not-found", "Bloqueio não encontrado.");
       tx.set(ref, { tenantId, date, start: input.start, end: input.end,
         professionalId: professionalId || null, reason: cleanText(input.reason, 240),
-        updatedAt: now, updatedBy: auth.uid, createdAt: now }, { merge: true });
+        updatedAt: now, updatedBy: auth.uid,
+        ...(!existing?.exists ? { createdAt: now, createdBy: auth.uid } : {}) }, { merge: true });
       tx.create(audit, { tenantId, actorUid: auth.uid,
         action: blockId ? "schedule.block_updated" : "schedule.block_created",
         resourceType: "scheduleBlock", resourceId: ref.id, createdAt: now });
