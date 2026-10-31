@@ -118,6 +118,39 @@
       async getCatalog({ tenantId } = {}) {
         return invoke("getTenantCatalog", { tenantId: await requireSelectedTenant(tenantId) });
       },
+      async getCatalogForManagement({ tenantId } = {}) {
+        return invoke("getTenantCatalogForManagement", {
+          tenantId: await requireSelectedTenant(tenantId)
+        });
+      },
+      async saveCatalogItem({ tenantId, kind, itemId, name, durationMinutes, priceMinor, currency, color, active } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        if (!["service", "professional"].includes(kind)) throw new Error("Tipo de cadastro inválido.");
+        const payload = { tenantId: id, kind };
+        if (itemId) payload.itemId = String(itemId).trim();
+        if (active === false) {
+          if (!payload.itemId) throw new Error("Selecione um cadastro para desativar.");
+          payload.active = false;
+        } else {
+          const normalizedName = String(name || "").trim();
+          if (normalizedName.length < 2 || normalizedName.length > 100) throw new Error("Informe um nome entre 2 e 100 caracteres.");
+          payload.name = normalizedName;
+          if (kind === "service") {
+            if (!Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > 480 || durationMinutes % 15 !== 0) {
+              throw new Error("A duração deve ser múltipla de 15 minutos, entre 15 e 480.");
+            }
+            if (!Number.isSafeInteger(priceMinor) || priceMinor < 0 || !/^[A-Z]{3}$/.test(String(currency || ""))) {
+              throw new Error("Informe preço em unidades mínimas e uma moeda válida.");
+            }
+            Object.assign(payload, { durationMinutes, priceMinor, currency });
+          } else {
+            const normalizedColor = String(color || "#2563EB");
+            if (!/^#[0-9a-fA-F]{6}$/.test(normalizedColor)) throw new Error("Cor inválida.");
+            payload.color = normalizedColor;
+          }
+        }
+        return invoke("saveTenantCatalogItem", payload);
+      },
       async getSchedule({ tenantId, startDate, endDate } = {}) {
         const id = await requireSelectedTenant(tenantId);
         const validDate = (value) => typeof value === "string" &&
