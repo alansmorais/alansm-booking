@@ -46,6 +46,11 @@ restoreDemoState();
 const dataAdapter=window.BookingData.createDemoAdapter(state);
 const workspaceAdapter=window.BookingWorkspace.createDemoWorkspaceAdapter({authAdapter:window.BookingAuth.createDemoAdapter(),dataAdapter});
 let activeWorkspaceName="Barbearia Modelo";
+let firebaseWorkspaceAdapter=null;
+let firebaseWorkspaceSession=null;
+let firebaseCatalog=null;
+let firebaseLoadVersion=0;
+let firebaseMode=false;
 const workspaceSelect=document.getElementById("workspaceSelect");
 const workspaceName=document.getElementById("workspaceName");
 const workspaceRole=document.getElementById("workspaceRole");
@@ -61,12 +66,16 @@ const initialTenant=(initialWorkspaceSession.tenants||[]).find(tenant=>(tenant.i
 if(initialTenant){activeWorkspaceName=initialTenant.name;workspaceName.textContent=initialTenant.name;workspaceRole.textContent=initialTenant.role==="owner"?"Proprietário · Demonstração":"Acesso · Demonstração";}
 workspaceSelect.addEventListener("change",async()=>{
  try{
+  if(firebaseMode&&firebaseWorkspaceAdapter){
+   const tenant=await firebaseWorkspaceAdapter.selectTenant(workspaceSelect.value);
+   activeWorkspaceName=tenant.name;workspaceName.textContent=tenant.name;
+   workspaceRole.textContent=(tenant.role==="owner"?"Proprietário":tenant.role==="admin"?"Administrador":"Equipa")+" · Firebase";
+   firebaseCatalog=null;render();return;
+  }
   const tenant=await workspaceAdapter.selectTenant(workspaceSelect.value);
-  activeWorkspaceName=tenant.name;
-  workspaceName.textContent=tenant.name;
+  activeWorkspaceName=tenant.name;workspaceName.textContent=tenant.name;
   workspaceRole.textContent=(tenant.role==="owner"?"Proprietário":"Acesso")+" · Demonstração";
-  render();
-  toast("Espaço de trabalho alterado.");
+  render();toast("Espaço de trabalho alterado.");
  }catch(error){toast(error.message);workspaceSelect.value=workspaceAdapter.getSession().selectedTenantId||"";}
 });
 const titles={team:"Equipe e acessos",overview:"Visão geral",calendar:"Agenda semanal",appointments:"Agendamentos",professionals:"Profissionais",services:"Serviços",clients:"Clientes","public-page":"Página de reservas",settings:"Configurações"};
@@ -89,7 +98,98 @@ function professionalScheduleEditor(){
  return '<section class="panel settings-card schedule-editor"><div class="panel-heading"><div><h2>Horários individuais</h2><p>Configure até dois períodos de trabalho por dia para cada profissional.</p></div></div><form id="professionalScheduleForm"><label class="schedule-person-label">Profissional <select name="professional">'+names.map(n=>'<option>'+escapeHTML(n)+'</option>').join('')+'</select></label>'+fields+'<div class="schedule-form-footer"><small>Os períodos devem estar dentro do horário da empresa e não podem sobrepor-se.</small><button class="primary-btn" type="submit">Guardar horário do profissional</button></div></form><div class="professional-schedule-summary">'+names.map(n=>'<div class="professional-schedule-row"><strong>'+escapeHTML(n)+'</strong><span>'+days.map(([label,d])=>label+': '+((state.professionalSchedules[n]?.[d]||[]).map(p=>p.start+'–'+p.end).join(' / ')||'Fechado')).join(' · ')+'</span></div>').join('')+'</div></section>';
 }
 function settings(){const days=["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"];return heading("Horários e funcionamento","Configure os horários da empresa e a disponibilidade individual da equipa.")+`<section class="panel settings-card schedule-editor"><div class="panel-heading"><div><h2>Funcionamento da empresa</h2><p>O horário da empresa é o limite máximo para qualquer reserva.</p></div><span class="status">Editável</span></div><form id="companyScheduleForm">${days.map((d,i)=>{const ps=state.companySchedule[i]||[],p=ps[0],q=ps[1];return `<div class="multi-period-row"><strong>${d}</strong><label><input type="checkbox" name="open-${i}" ${p?"checked":""}> Aberto</label><div class="period-fields"><span>Período 1</span><input type="time" name="start-${i}" value="${p?.start||"09:00"}"><span>até</span><input type="time" name="end-${i}" value="${p?.end||"18:00"}"><span>pausa</span><input type="time" name="break-start-${i}" value="${p?.breaks?.[0]?.start||""}"><span>até</span><input type="time" name="break-end-${i}" value="${p?.breaks?.[0]?.end||""}"></div><div class="period-fields"><span>Período 2</span><input type="time" name="start2-${i}" value="${q?.start||""}"><span>até</span><input type="time" name="end2-${i}" value="${q?.end||""}"></div></div>`}).join("")}<div class="schedule-form-footer"><small>Desmarque o dia para fechar a empresa. O intervalo é opcional.</small><button class="primary-btn" type="submit">Guardar horário da empresa</button></div></form></section>'+professionalScheduleEditor()+'<section class="panel settings-card schedule-editor"><div class="panel-heading"><div><h2>Feriados e exceções</h2><p>Datas em que a empresa estará fechada.</p></div></div><form id="exceptionForm" class="exception-form"><label>Data <input type="date" name="date" required></label><label>Motivo <input name="label" maxlength="60" placeholder="Ex.: Feriado / férias coletivas" required></label><button class="secondary-btn" type="submit">Adicionar dia fechado</button></form>${state.exceptions.map((x,i)=>`<div class="setting-row"><div><strong>${escapeHTML(x.date.split("-").reverse().join("/"))}</strong><small>${escapeHTML(x.label)}</small></div><button class="secondary-btn" data-action="remove-exception" data-index="${i}">Remover</button></div>`).join("")||'<p class="empty-state">Nenhuma exceção cadastrada.</p>'}</section><div class="demo-banner">Configurações guardadas localmente neste navegador. Ainda não são enviadas ao Google Sheets nem sincronizadas com outros dispositivos.</div>`}
-function render(){document.getElementById("breadcrumbTitle").textContent=titles[state.view];const views={overview,calendar,appointments,professionals,services,clients,team:()=>window.BookingTeam.render(),"public-page":publicPage,settings};content.innerHTML=views[state.view]();document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===state.view));if(state.view==="team"&&typeof window.BookingTeam.mount==="function")window.BookingTeam.mount();}
+function renderFirebaseView(){
+ const version=++firebaseLoadVersion,tenantId=firebaseWorkspaceAdapter?.getSelectedTenantId();
+ document.getElementById("breadcrumbTitle").textContent=titles[state.view]||"Visão geral";
+ document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===state.view));
+ if(!tenantId){content.innerHTML=heading("Selecione uma empresa","Escolha um espaço de trabalho para carregar os dados.")+'<div class="panel settings-card">Esta conta tem mais de uma empresa. Selecione uma no menu lateral.</div>';return;}
+ content.innerHTML=heading("A carregar dados...","A consultar o espaço de trabalho selecionado.")+'<div class="panel settings-card">A carregar informações do Firebase...</div>';
+ (async()=>{
+  try{
+   const [catalog,agendaResult]=await Promise.all([
+    firebaseCatalog?Promise.resolve(firebaseCatalog):firebaseWorkspaceAdapter.getCatalog({tenantId}),
+    firebaseWorkspaceAdapter.getAgenda({tenantId,startAtMs:Date.now()-7*86400000,endAtMs:Date.now()+31*86400000})
+   ]);
+   if(version!==firebaseLoadVersion)return;
+   firebaseCatalog=catalog;
+   const pros=Array.isArray(catalog.professionals)?catalog.professionals:[];
+   const services=Array.isArray(catalog.services)?catalog.services:[];
+   const proName=id=>pros.find(p=>p.id===id)?.name||"Profissional";
+   const serviceName=id=>services.find(s=>s.id===id)?.name||"Serviço";
+   const items=Array.isArray(agendaResult.appointments)?agendaResult.appointments:[];
+   const money=(minor,currency)=>Number.isSafeInteger(minor)?new Intl.NumberFormat("pt-BR",{style:"currency",currency:currency||"BRL"}).format(minor/100):"—";
+   const dateTime=a=>new Date(a.startAtMs).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"});
+   const statusLabel={booked:"Reservado",confirmed:"Confirmado",pending:"Pendente",cancelled:"Cancelado",completed:"Concluído",no_show:"Não compareceu"};
+   const rowItems=items.slice().sort((a,b)=>a.startAtMs-b.startAtMs).map(a=>[
+    "<strong>"+escapeHTML(dateTime(a))+"</strong>",
+    escapeHTML(a.clientId?"Cliente · "+a.clientId.slice(0,7):"Cliente não identificado"),
+    escapeHTML(serviceName(a.serviceId)),escapeHTML(proName(a.professionalId)),
+    '<span class="status">'+escapeHTML(statusLabel[a.status]||a.status)+'</span>'
+   ]);
+   const tableHtml=(headers,rows)=>'<div class="panel table-wrap"><table class="data-table"><thead><tr>'+headers.map(h=>"<th>"+h+"</th>").join("")+'</tr></thead><tbody>'+(rows.length?rows.map(r=>"<tr>"+r.map(c=>"<td>"+c+"</td>").join("")+"</tr>").join(""):'<tr><td colspan="'+headers.length+'" class="empty-state">Nenhum registo encontrado.</td></tr>')+'</tbody></table></div>';
+   const demoNotice='<div class="demo-banner">Dados carregados do Firebase Emulator. Esta integração é apenas local; nenhum projeto de produção está configurado.</div>';
+   let body="";
+   if(state.view==="overview"){
+    body=heading("Visão geral","Resumo dos dados reais desta empresa.")+
+     '<div class="stats-grid"><div class="stat-card"><div class="stat-top">Agendamentos no período</div><div class="stat-value">'+items.length+'</div><div class="stat-foot">Consulta limitada a 31 dias</div></div><div class="stat-card"><div class="stat-top">Profissionais ativos</div><div class="stat-value">'+pros.length+'</div><div class="stat-foot">Catálogo da empresa</div></div><div class="stat-card"><div class="stat-top">Serviços ativos</div><div class="stat-value">'+services.length+'</div><div class="stat-foot">Catálogo da empresa</div></div></div>'+
+     '<div class="panel settings-card"><h2>Agendamentos recentes</h2>'+tableHtml(["DATA / HORÁRIO","CLIENTE","SERVIÇO","PROFISSIONAL","ESTADO"],rowItems.slice(0,8))+'</div>';
+   }else if(state.view==="appointments"||state.view==="calendar"){
+    body=heading(state.view==="calendar"?"Agenda":"Agendamentos","Registos devolvidos pelo backend da empresa.")+
+     '<div class="toolbar"><input class="search-input" id="search" placeholder="Pesquisar serviço ou profissional..." value="'+escapeHTML(state.query)+'"></div>'+
+     tableHtml(["DATA / HORÁRIO","CLIENTE","SERVIÇO","PROFISSIONAL","ESTADO"],rowItems.filter(r=>r.join(" ").toLowerCase().includes(state.query.toLowerCase())));
+   }else if(state.view==="professionals"){
+    body=heading("Profissionais","Profissionais ativos cadastrados nesta empresa.")+
+     tableHtml(["PROFISSIONAL","ESTADO"],pros.map(p=>["<strong>"+escapeHTML(p.name)+"</strong>",'<span class="status">Ativo</span>']));
+   }else if(state.view==="services"){
+    body=heading("Serviços","Serviços ativos cadastrados nesta empresa.")+
+     tableHtml(["SERVIÇO","DURAÇÃO","PREÇO","ESTADO"],services.map(s=>["<strong>"+escapeHTML(s.name)+"</strong>",(s.durationMinutes??"—")+" min",escapeHTML(money(s.priceMinor,s.currency)), '<span class="status">Ativo</span>']));
+   }else if(state.view==="clients"){
+    body=heading("Clientes","A leitura de dados pessoais de clientes ainda não foi disponibilizada no backend.")+
+     '<div class="panel settings-card">Nenhum dado fictício será exibido aqui. O endpoint seguro de clientes será implementado numa etapa própria.</div>';
+   }else if(state.view==="team"){
+    body=heading("Equipe e acessos","A gestão de membros será ligada nesta etapa seguinte.")+
+     '<div class="panel settings-card">Os dados de membros ainda não estão integrados nesta vista.</div>';
+   }else if(state.view==="settings"){
+    body=heading("Configurações","As configurações reais de horários serão ligadas numa próxima etapa.")+
+     '<div class="panel settings-card">Esta página não altera dados do Firebase neste momento.</div>';
+   }else{
+    body=heading("Página pública","A publicação de reservas ainda não está ativada.")+
+     '<div class="panel settings-card">O link público só será ativado depois de concluir e testar o fluxo de reservas.</div>';
+   }
+   content.innerHTML=body+demoNotice;
+  }catch(error){
+   if(version!==firebaseLoadVersion)return;
+   content.innerHTML=heading("Não foi possível carregar os dados","O backend recusou ou não conseguiu concluir a consulta.")+
+    '<div class="panel settings-card">'+escapeHTML(error.message||"Erro de comunicação.")+'</div>';
+  }
+ })();
+}
+function render(){
+ if(firebaseMode){renderFirebaseView();return;}
+ document.getElementById("breadcrumbTitle").textContent=titles[state.view];
+ const views={overview,calendar,appointments,professionals,services,clients,team:()=>window.BookingTeam.render(),"public-page":publicPage,settings};
+ content.innerHTML=views[state.view]();
+ document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===state.view));
+ if(state.view==="team"&&typeof window.BookingTeam.mount==="function")window.BookingTeam.mount();
+}
+window.BookingApp=Object.freeze({
+ async connectFirebaseWorkspace(adapter,session){
+  firebaseWorkspaceAdapter=adapter;firebaseWorkspaceSession=session;firebaseMode=true;
+  workspaceSelect.innerHTML="";
+  (session.tenants||[]).forEach(tenant=>{
+   const option=document.createElement("option");option.value=tenant.tenantId;option.textContent=tenant.name;
+   workspaceSelect.appendChild(option);
+  });
+  const selected=adapter.getSelectedTenantId()||(session.tenants.length===1?session.tenants[0].tenantId:"");
+  if(selected){await adapter.selectTenant(selected);workspaceSelect.value=selected;}
+  const tenant=(session.tenants||[]).find(t=>t.tenantId===selected);
+  if(tenant){activeWorkspaceName=tenant.name;workspaceName.textContent=tenant.name;workspaceRole.textContent=(tenant.role==="owner"?"Proprietário":tenant.role==="admin"?"Administrador":"Equipa")+" · Firebase";}
+  document.querySelector(".demo-pill").textContent="FIREBASE EMULATOR";
+  const profile=document.querySelector(".profile");if(profile){profile.querySelector("strong").textContent=session.user?.displayName||session.user?.email||"Utilizador";profile.querySelector("small").textContent="Conta autenticada";}
+  state.view="overview";state.query="";render();
+ },
+ disconnectFirebaseWorkspace(){firebaseMode=false;firebaseWorkspaceAdapter=null;firebaseWorkspaceSession=null;firebaseCatalog=null;workspaceSelect.innerHTML="";document.querySelector(".demo-pill").textContent="MODO DEMONSTRAÇÃO";render();}
+});
 function toast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2600);}
 function modal(){const wrap=document.createElement("div");wrap.className="modal-backdrop";wrap.innerHTML=`<form class="modal" id="appointmentForm"><h2>Novo agendamento</h2><p>Registo local de demonstração — não será enviado a nenhum cliente.</p><div class="form-grid"><div class="form-field"><label>Nome do cliente</label><input name="name" required maxlength="80" placeholder="Ex.: João Silva"></div><div class="form-field"><label>Data</label><input name="date" type="date" required value="${isoDate(today)}"></div><div class="form-field"><label>Serviço</label><select name="service">${state.services.map(s=>`<option value="${escapeHTML(s[0])}" data-duration="${s[1]}">${escapeHTML(s[0])} · ${s[1]} min</option>`).join("")}</select></div><div class="form-field"><label>Profissional</label><select name="professional">${state.professionals.map(p=>`<option>${escapeHTML(p[0])}</option>`).join("")}</select></div><div class="form-field"><label>Horário</label><select name="time" id="availableTimes"></select></div></div><p id="availabilityMessage" class="availability-message" aria-live="polite"></p><div class="modal-actions"><button type="button" class="secondary-btn" data-action="close-modal">Cancelar</button><button class="primary-btn" type="submit">Guardar demonstração</button></div></form>`;document.body.append(wrap);const form=wrap.querySelector("form"),date=form.elements.date,service=form.elements.service,pro=form.elements.professional,time=form.elements.time,msg=wrap.querySelector("#availabilityMessage");function refresh(){const duration=Number(service.selectedOptions[0].dataset.duration),slots=availability.slots({date:date.value,duration,professional:pro.value,appointments:workspaceAdapter.getAgenda(),...workspaceAdapter.getSchedule()});time.innerHTML=slots.map(s=>`<option value="${s.time}" ${s.available?"":"disabled"}>${s.time}${s.available?"":" · indisponível"}</option>`).join("");const free=slots.filter(s=>s.available);msg.textContent=free.length?`${free.length} horários disponíveis (intervalos de 30 min).`:"Não há horários disponíveis para esta combinação.";form.querySelector('[type="submit"]').disabled=!free.length;}[date,service,pro].forEach(el=>el.addEventListener("change",refresh));refresh();wrap.addEventListener("click",e=>{if(e.target===wrap||e.target.closest('[data-action="close-modal"]'))wrap.remove();});form.addEventListener("submit",e=>{e.preventDefault();const duration=Number(service.selectedOptions[0].dataset.duration),check=availability.isAvailable({date:date.value,time:time.value,duration,professional:pro.value,appointments:dataAdapter.getAppointments(),...dataAdapter.getScheduleData()});if(!check.ok){msg.textContent=check.reason;refresh();return;}state.appointments.push({date:date.value,time:time.value,duration,name:form.elements.name.value.trim(),service:service.value,professional:pro.value,status:"Pendente"});persistDemoState();wrap.remove();state.view="calendar";render();toast("Agendamento adicionado apenas à demonstração.");});}
 document.addEventListener("submit",e=>{if(e.target.id==="professionalScheduleForm"){e.preventDefault();const f=e.target,person=f.elements.professional.value,next={};for(const d of [1,2,3,4,5,6,0]){if(!f.elements["open-"+d].checked){next[d]=[];continue;}const start=f.elements["start-"+d].value,end=f.elements["end-"+d].value,bs=f.elements["break-start-"+d].value,be=f.elements["break-end-"+d].value,company=state.companySchedule[d]||[];if(!start||!end||start>=end||!company.some(p=>start>=p.start&&end<=p.end)){toast("O horário individual deve estar dentro do horário da empresa.");return;}if((bs&&!be)||(!bs&&be)||(bs&&!(start<bs&&bs<be&&be<end))){toast("Intervalo inválido.");return;}const start2=f.elements["start2-"+d].value,end2=f.elements["end2-"+d].value,periods=[{start,end,breaks:bs?[{start:bs,end:be}]:[]}];if((start2&&!end2)||(!start2&&end2)||(start2&&start2>=end2)){toast("Verifique o segundo período.");return;}if(start2){if(start2<end){toast("O segundo período deve começar após o primeiro.");return;}if(!company.some(p=>start2>=p.start&&end2<=p.end)){toast("O segundo período deve estar dentro do horário da empresa.");return;}periods.push({start:start2,end:end2,breaks:[]});}next[d]=periods;}state.professionalSchedules[person]=next;persistDemoState();render();toast("Horário individual atualizado.");}});
