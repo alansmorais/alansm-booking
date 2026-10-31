@@ -67,7 +67,7 @@
       data.innerHTML=
         '<div class="firebase-readonly-stats"><article><strong>'+appts.length+'</strong><span>Agendamentos no período</span></article><article><strong>'+professionals.length+'</strong><span>Profissionais</span></article><article><strong>'+services.length+'</strong><span>Serviços</span></article><article><strong>'+blocks.length+'</strong><span>Bloqueios</span></article></div>'+
         '<section class="firebase-readonly-section"><h2>Agenda · '+escape(startDate)+' a '+escape(endDate)+'</h2>'+
-        (appts.length?'<div class="firebase-readonly-table-wrap"><table><thead><tr><th>Data</th><th>Hora</th><th>Serviço</th><th>Profissional</th><th>Estado</th><th>Valor</th></tr></thead><tbody>'+appts.map(a=>'<tr><td>'+escape(a.date)+'</td><td>'+escape(a.time)+'</td><td>'+escape(a.service)+'</td><td>'+escape(a.professional)+'</td><td>'+escape(a.status)+'</td><td>'+escape(money(a.priceMinor,a.currency))+'</td></tr>').join("")+'</tbody></table></div>':'<p class="firebase-readonly-empty">Não há agendamentos neste período.</p>')+'</section>'+
+        (appts.length?'<div class="firebase-readonly-table-wrap"><table><thead><tr><th>Data</th><th>Hora</th><th>Cliente</th><th>Serviço</th><th>Profissional</th><th>Estado</th><th>Valor</th></tr></thead><tbody>'+appts.map(a=>'<tr><td>'+escape(a.date)+'</td><td>'+escape(a.time)+'</td><td>'+escape(a.name)+'</td><td>'+escape(a.service)+'</td><td>'+escape(a.professional)+'</td><td>'+escape(a.status)+'</td><td>'+escape(money(a.priceMinor,a.currency))+'</td></tr>').join("")+'</tbody></table></div>':'<p class="firebase-readonly-empty">Não há agendamentos neste período.</p>')+'</section>'+
         '<div class="firebase-readonly-columns"><section class="firebase-readonly-section"><h2>Profissionais</h2>'+(professionals.length?'<ul>'+professionals.map(p=>'<li>'+escape(p[0])+' <span>'+escape(p[3])+'</span></li>').join("")+'</ul>':'<p class="firebase-readonly-empty">Nenhum profissional cadastrado.</p>')+'</section>'+
         '<section class="firebase-readonly-section"><h2>Serviços</h2>'+(services.length?'<ul>'+services.map(s=>'<li>'+escape(s[0])+' <span>'+escape(s[1]+' min')+' · '+escape(s[2])+'</span></li>').join("")+'</ul>':'<p class="firebase-readonly-empty">Nenhum serviço cadastrado.</p>')+'</section></div>'+
         '<section class="firebase-readonly-section"><h2>Horários e disponibilidade</h2><p>Fuso horário: '+escape(schedule.timezone||"não informado")+'.'+(schedule.truncated?' Alguns registos foram limitados pela consulta.':'')+'</p><p>Os horários e bloqueios foram carregados do workspace autorizado.</p></section>';
@@ -116,10 +116,14 @@
             if(part("year")!==String(year)||part("month")!==String(month).padStart(2,"0")||part("day")!==String(day).padStart(2,"0")||part("hour")!==String(hour).padStart(2,"0")||part("minute")!==String(minute).padStart(2,"0"))throw new Error("Este horário não existe no fuso horário da empresa devido à mudança de hora.");
             const key=window.crypto?.randomUUID?window.crypto.randomUUID():("booking-"+Date.now()+"-"+Math.random().toString(36).slice(2,14));
             await workspace.createAppointment({tenantId:tenant.tenantId,clientId:String(values.get("clientId")||""),serviceId:String(values.get("serviceId")||""),professionalId:String(values.get("professionalId")||""),startAtMs,idempotencyKey:key,notes:String(values.get("notes")||"")});
-            bookingStatus.textContent="Agendamento confirmado e guardado no Firebase.";
-            const refreshed=await dashboard.loadAgenda({tenantId:tenant.tenantId,startAtMs,endAtMs});
-            const tbody=data.querySelector(".firebase-readonly table tbody");
-            if(tbody){tbody.replaceChildren();refreshed.appointments.forEach(a=>{const tr=document.createElement("tr");[a.date,a.time,a.service,a.professional,a.status,money(a.priceMinor,a.currency)].forEach(value=>{const td=document.createElement("td");td.textContent=value;tr.append(td);});tbody.append(tr);});}
+            if(date>=startDate&&date<=endDate){
+              bookingStatus.textContent="Agendamento confirmado e guardado no Firebase.";
+              const refreshed=await dashboard.loadAgenda({tenantId:tenant.tenantId,startAtMs,endAtMs});
+              const tbody=data.querySelector(".firebase-readonly table tbody");
+              if(tbody){tbody.replaceChildren();refreshed.appointments.forEach(a=>{const tr=document.createElement("tr");[a.date,a.time,a.name,a.service,a.professional,a.status,money(a.priceMinor,a.currency)].forEach(value=>{const td=document.createElement("td");td.textContent=value;tr.append(td);});tbody.append(tr);});}
+            }else{
+              bookingStatus.textContent="Agendamento confirmado. A data foi guardada; está fora dos sete dias atualmente exibidos na agenda.";
+            }
             bookingForm.elements.notes.value="";
           }catch(error){bookingStatus.textContent="Não foi possível confirmar: "+(error.message||"erro desconhecido");}
           finally{submit.disabled=false;}
