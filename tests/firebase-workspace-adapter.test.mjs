@@ -37,6 +37,55 @@ test("Firebase workspace calls tenant-scoped callable functions", async () => {
   assert.equal(calls[5].payload.professionalId, "pro-1");
 });
 
+
+test("Firebase workspace scopes catalog management reads and writes to selected tenant", async () => {
+  const calls = [];
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async (payload) => {
+        calls.push({ name, payload });
+        if (name === "getSession") return { data: { tenants: [{ tenantId: "tenant-catalog", name: "Empresa" }] } };
+        return { data: { ok: true, itemId: "service-1" } };
+      };
+    }
+  });
+  const catalog = await adapter.getCatalogForManagement();
+  assert.equal(catalog.ok, true);
+  const saved = await adapter.saveCatalogItem({
+    kind: "service", name: "Corte", durationMinutes: 30,
+    priceMinor: 5000, currency: "PLN"
+  });
+  assert.equal(saved.itemId, "service-1");
+  await adapter.saveCatalogItem({ kind: "professional", itemId: "pro-1", active: false });
+  const mutations = calls.filter(call => call.name !== "getSession");
+  assert.deepEqual(mutations.map(call => call.name), [
+    "getTenantCatalogForManagement", "saveTenantCatalogItem", "saveTenantCatalogItem"
+  ]);
+  assert.ok(mutations.every(call => call.payload.tenantId === "tenant-catalog"));
+  assert.equal(mutations[1].payload.priceMinor, 5000);
+  assert.equal(mutations[2].payload.active, false);
+});
+
+test("Firebase workspace rejects invalid catalog mutations before invoking backend", async () => {
+  let writes = 0;
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async () => {
+        if (name === "getSession") return { data: { tenants: [{ tenantId: "tenant-catalog", name: "Empresa" }] } };
+        writes += 1;
+        return { data: {} };
+      };
+    }
+  });
+  await assert.rejects(adapter.saveCatalogItem({ kind: "service", name: "Corte", durationMinutes: 17, priceMinor: 100, currency: "PLN" }), /múltipla de 15/);
+  await assert.rejects(adapter.saveCatalogItem({ kind: "professional", name: "A", color: "red" }), /2 e 100/);
+  assert.equal(writes, 0);
+});
+
 test("Firebase workspace blocks tenant creation for unverified users", async () => {
   let invoked = false;
   const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
