@@ -22,12 +22,12 @@ test("auth UI uses Firebase adapters only in the explicitly enabled emulator run
 test("registration requires email verification before creating a tenant", () => {
   assert.match(auth, /registerAndCreateWorkspace/);
   assert.match(auth, /completeAfterVerification/);
-  assert.match(auth, /Já confirmei o meu e-mail/);
+  assert.match(html, /Já confirmei o meu e-mail/);
   assert.match(auth, /workspace\.createTenant/);
 });
 
 test("demo mode remains separate and does not silently authenticate", () => {
   assert.match(auth, /createDemoAdapter/);
-  assert.match(auth, /Continuar na demonstração local/);
+  assert.match(html, /Continuar na demonstração local/);
   assert.match(auth, /cadastro e login reais estão desativados/);
 });
