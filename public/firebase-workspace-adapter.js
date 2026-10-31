@@ -118,6 +118,25 @@
       async getCatalog({ tenantId } = {}) {
         return invoke("getTenantCatalog", { tenantId: await requireSelectedTenant(tenantId) });
       },
+      async getClients({ tenantId } = {}) {
+        return invoke("getTenantClients", { tenantId: await requireSelectedTenant(tenantId) });
+      },
+      async saveClient({ tenantId, clientId = "", name, phone = "", email = "", notes = "", status = "active" } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        const normalizedName = String(name || "").trim();
+        const normalizedPhone = String(phone || "").trim();
+        const normalizedEmail = String(email || "").trim().toLowerCase();
+        const normalizedNotes = String(notes || "").trim();
+        if (!["active", "inactive"].includes(status)) throw new Error("Estado do cliente inválido.");
+        if (status === "active" && normalizedName.length < 2) throw new Error("Informe o nome do cliente.");
+        if (normalizedEmail && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) throw new Error("Informe um e-mail válido.");
+        if (normalizedPhone && !/^[+0-9() .-]{7,30}$/.test(normalizedPhone)) throw new Error("Informe um telefone válido.");
+        return invoke("saveTenantClient", {
+          tenantId: id, ...(clientId ? { clientId: String(clientId) } : {}),
+          name: normalizedName, phone: normalizedPhone, email: normalizedEmail,
+          notes: normalizedNotes, status
+        });
+      },
       async saveCatalogItem({ tenantId, kind, itemId = "", name, durationMinutes, priceMinor, currency, color, status = "active" } = {}) {
         const id = await requireSelectedTenant(tenantId);
         if (!["service", "professional"].includes(kind)) throw new Error("Tipo de cadastro inválido.");
