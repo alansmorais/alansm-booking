@@ -1161,7 +1161,7 @@ export const getTenantClients = onCall(
     const tenantId = cleanText((request.data || {}).tenantId, 128);
     await requireTenantReader(auth.uid, tenantId);
     const snapshot = await db.collection(`tenants/${tenantId}/clients`)
-      .orderBy("updatedAt", "desc").limit(200).get();
+      .limit(200).get();
     return {
       ok: true,
       clients: snapshot.docs.flatMap((doc) => {
