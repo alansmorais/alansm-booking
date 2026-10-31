@@ -53,3 +53,25 @@ test("emulator Firebase options contain only the demo project identity", () => {
   assert.equal(options.apiKey, "demo-api-key-not-a-secret");
   assert.equal(options.appId, "demo-alansm-booking-app");
 });
+
+test("remote Firebase development mode is restricted to the dedicated preview host", () => {
+  const config = loadConfig("", "localhost");
+  const allowed = config.resolveMode({
+    search: "?backend=firebase-development",
+    hostname: "firebase-emulator-bootstrap.alansm-booking-preview.pages.dev"
+  });
+  assert.equal(allowed.mode, "firebase-development");
+  assert.equal(allowed.configUrl, "/api/firebase-config");
+
+  for (const hostname of ["localhost", "alansm-booking.com", "alansm-booking-preview.pages.dev", "evil.example"]) {
+    assert.throws(
+      () => config.resolveMode({ search: "?backend=firebase-development", hostname }),
+      /preview autorizado/
+    );
+  }
+});
+
+test("remote Firebase development is never selected by default", () => {
+  const config = loadConfig("", "firebase-emulator-bootstrap.alansm-booking-preview.pages.dev");
+  assert.equal(config.resolveMode({ search: "", hostname: "firebase-emulator-bootstrap.alansm-booking-preview.pages.dev" }).mode, "demo");
+});
