@@ -26,7 +26,7 @@ test("Firebase dashboard maps the safe catalog to legacy display rows without in
 
 test("Firebase dashboard maps schedule records without losing tenant timezone or IDs", async () => {
   const adapter = window.BookingFirebaseDashboard.createFirebaseDashboardAdapter({
-    workspace: { mode: "firebase", getSchedule: async () => ({
+    workspace: { mode: "firebase", getCatalog: async () => ({ professionals: [{ id: "pro-1", name: "Ana", status: "active" }] }), getSchedule: async () => ({
       timezone: "Europe/Warsaw", companySchedule: { "1": [{ start: "09:00", end: "17:00", breaks: [] }] },
       professionalSchedules: { "pro-1": { "1": [{ start: "10:00", end: "16:00" }] } },
       blocks: [{ id: "b1", date: "2026-11-02", start: "12:00", end: "13:00", reason: "Pausa" }],
@@ -39,13 +39,14 @@ test("Firebase dashboard maps schedule records without losing tenant timezone or
   assert.equal(result.blocks[0].id, "b1");
   assert.equal(result.blocks[0].label, "Pausa");
   assert.equal(result.exceptions[0].label, "Feriado");
-  assert.equal(result.professionalExceptions[0].professionalId, "pro-1");
+  assert.equal(result.professionalExceptions[0].professionalId, "Ana");
+  assert.deepEqual(JSON.parse(JSON.stringify(result.professionalSchedules)), { Ana: { "1": [{ start: "10:00", end: "16:00" }] } });
 });
 
 test("Firebase dashboard converts appointment timestamps in the tenant timezone and keeps client data private", async () => {
   const adapter = window.BookingFirebaseDashboard.createFirebaseDashboardAdapter({
     timeZone: "Europe/Warsaw",
-    workspace: { mode: "firebase", getAgenda: async () => ({
+    workspace: { mode: "firebase", getCatalog: async () => ({ professionals: [{ id: "pro-1", name: "Ana", status: "active" }], services: [{ id: "svc-1", name: "Corte", status: "active" }] }), getAgenda: async () => ({
       appointments: [{
         id: "a1", clientId: "c1", professionalId: "pro-1", serviceId: "svc-1",
         startAtMs: Date.parse("2026-11-02T09:00:00Z"), endAtMs: Date.parse("2026-11-02T09:30:00Z"),
@@ -53,6 +54,7 @@ test("Firebase dashboard converts appointment timestamps in the tenant timezone 
       }]
     }) }
   });
+  await adapter.loadCatalog();
   const result = await adapter.loadAgenda({ startAtMs: 1, endAtMs: 2 });
   assert.equal(result.appointments[0].date, "2026-11-02");
   assert.equal(result.appointments[0].time, "10:00");
@@ -60,4 +62,6 @@ test("Firebase dashboard converts appointment timestamps in the tenant timezone 
   assert.equal(result.appointments[0].status, "Confirmado");
   assert.equal(result.appointments[0].name, "Cliente");
   assert.equal(result.appointments[0].clientId, "c1");
+  assert.equal(result.appointments[0].professional, "Ana");
+  assert.equal(result.appointments[0].service, "Corte");
 });

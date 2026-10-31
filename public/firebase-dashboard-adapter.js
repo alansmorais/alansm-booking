@@ -16,9 +16,17 @@
     if (!workspace || workspace.mode !== "firebase") {
       throw new TypeError("O workspace Firebase é obrigatório.");
     }
+    const professionalNames = new Map();
+    const serviceNames = new Map();
+    const professionalName = (id) => professionalNames.get(id) || id || "";
+    const serviceName = (id) => serviceNames.get(id) || id || "";
 
     async function loadCatalog(options = {}) {
       const result = await workspace.getCatalog(options);
+      professionalNames.clear();
+      serviceNames.clear();
+      (result.professionals || []).forEach((item) => professionalNames.set(item.id, text(item.name, "Profissional")));
+      (result.services || []).forEach((item) => serviceNames.set(item.id, text(item.name, "Serviço")));
       return {
         professionals: (result.professionals || []).map((item) => [
           text(item.name, "Profissional"), "", "", text(item.status) === "active" ? "Ativo" : "Inativo", item.id
@@ -38,16 +46,16 @@
       const result = await workspace.getSchedule({ ...options, startDate, endDate });
       return {
         companySchedule: result.companySchedule || {},
-        professionalSchedules: result.professionalSchedules || {},
+        professionalSchedules: Object.fromEntries(Object.entries(result.professionalSchedules || {}).map(([id, days]) => [professionalName(id), days])),
         blocks: (result.blocks || []).map((item) => ({
           id: item.id, date: item.date, start: item.start, end: item.end,
-          professionalId: item.professionalId || "", label: text(item.reason, "Bloqueio")
+          professionalId: professionalName(item.professionalId), label: text(item.reason, "Bloqueio")
         })),
         exceptions: (result.exceptions || []).map((item) => ({
           id: item.id, date: item.date, label: text(item.reason || item.kind, "Empresa fechada")
         })),
         professionalExceptions: (result.professionalExceptions || []).map((item) => ({
-          id: item.id, date: item.date, professionalId: item.professionalId || "",
+          id: item.id, date: item.date, professionalId: professionalName(item.professionalId),
           label: text(item.reason || item.kind, "Ausência")
         })),
         timezone: text(result.timezone, timeZone),
@@ -72,6 +80,7 @@
             id: item.id, date: start.date, time: start.time, endTime: end.time, duration,
             name: "Cliente", clientId: item.clientId || "",
             serviceId: item.serviceId || "", professionalId: item.professionalId || "",
+            service: serviceName(item.serviceId), professional: professionalName(item.professionalId),
             status: statuses[item.status] || "Pendente",
             priceMinor: item.priceMinor ?? null, currency: item.currency || null
           };
