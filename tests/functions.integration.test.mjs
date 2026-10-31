@@ -433,10 +433,10 @@ test("cancelAppointment cancels once, records audit and treats replay as idempot
   assert.equal(replay.data.result?.ok, true, JSON.stringify(replay.data));
   assert.equal(replay.data.result.alreadyCancelled, true);
 
-  const audit = await adminDb.collection(`tenants/${tenantId}/auditLog`)
-    .where("resourceId", "==", appointmentId)
-    .where("action", "==", "appointment.cancelled").get();
-  assert.equal(audit.size, 1);
+  const audit = await adminDb.collection(`tenants/${tenantId}/auditLog`).get();
+  const cancellationEvents = audit.docs.filter((doc) =>
+    doc.data().resourceId === appointmentId && doc.data().action === "appointment.cancelled");
+  assert.equal(cancellationEvents.length, 1);
 });
 
 test("cancelAppointment rejects staff and does not modify another tenant appointment", async () => {
