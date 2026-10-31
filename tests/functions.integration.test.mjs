@@ -117,6 +117,28 @@ test("saveScheduleSettings accepts valid company and professional weekly hours",
   assert.equal(result.data.result.scheduleId, "company");
 });
 
+test("getTenantSchedule returns tenant-scoped weekly settings", async () => {
+  const result = await callable("getTenantSchedule", {
+    tenantId, startDate: "2026-10-01", endDate: "2026-10-31"
+  });
+  assert.equal(result.data.result?.ok, true, JSON.stringify(result.data));
+  assert.equal(result.data.result.timezone, "Europe/Warsaw");
+  assert.ok(result.data.result.companySchedule["1"]);
+  assert.deepEqual(result.data.result.blocks, []);
+  assert.deepEqual(result.data.result.exceptions, []);
+});
+
+test("getTenantSchedule rejects invalid or oversized date windows", async () => {
+  const invalid = await callable("getTenantSchedule", {
+    tenantId, startDate: "2026-10-31", endDate: "2026-10-01"
+  });
+  assert.equal(invalid.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(invalid.data));
+  const oversized = await callable("getTenantSchedule", {
+    tenantId, startDate: "2026-01-01", endDate: "2026-04-15"
+  });
+  assert.equal(oversized.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(oversized.data));
+});
+
 test("saveScheduleSettings rejects overlapping or malformed periods", async () => {
   const days = { "1": [
     { start: "09:00", end: "13:00", breaks: [] },
