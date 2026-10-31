@@ -21,6 +21,7 @@
   let firebaseWorkspace = null;
   let onboarding = null;
   let firebaseMode = false;
+  let firebaseModeName = "Firebase";
 
   function notify(message) {
     const toast = document.getElementById("toast");
@@ -123,7 +124,7 @@
     if (!tenants.length) {
       showFirebaseStatus(
         "E-mail confirmado · falta criar a empresa",
-        "A conta está autenticada no Firebase Emulator. Entre novamente no separador Criar conta, informe os dados da empresa e conclua a criação do workspace.",
+        "A conta está autenticada no ambiente Firebase de desenvolvimento. Informe os dados da empresa para concluir a criação do workspace.",
         [{
           label: "Informar dados da empresa",
           action: () => {
@@ -164,13 +165,16 @@
     if (!runtime) throw new Error("O runtime Firebase não foi carregado.");
     await runtime.ready;
     if (runtime.mode !== "firebase-emulator" || !runtime.auth || !runtime.functions) {
-      throw new Error("O Firebase Emulator não está disponível. Inicie os emuladores locais antes de tentar novamente.");
+      throw new Error("O ambiente Firebase solicitado não está disponível ou não foi configurado.");
     }
     firebaseAuth = compatAuthAdapter(runtime.auth);
     firebaseWorkspace = compatFunctionsAdapter(runtime.functions);
     onboarding = window.BookingOnboarding.createOnboardingFlow({ auth: firebaseAuth, workspace: firebaseWorkspace });
     firebaseMode = true;
-    setNotice("EMULADOR LOCAL", "Login e registo usam exclusivamente o Firebase Emulator local. Nenhuma conta ou palavra-passe é enviada para Firebase de produção.", "success");
+    firebaseModeName = runtime.mode === "firebase-development" ? "Firebase Development" : "Firebase Emulator";
+    setNotice(firebaseModeName, runtime.mode === "firebase-development"
+      ? "Login e registo usam o projeto Firebase separado de desenvolvimento. Não utilize dados reais ou de produção."
+      : "Login e registo usam exclusivamente os emuladores locais. Nenhuma conta ou palavra-passe é enviada para Firebase de produção.", "success");
     demoButton.hidden = true;
     const user = firebaseAuth.getCurrentUser();
     if (user) {
@@ -215,12 +219,12 @@
       });
       const user = firebaseAuth.getCurrentUser();
       if (!user.emailVerified) {
-        showFirebaseStatus("Confirmação de e-mail pendente", "Confirme o e-mail desta conta de teste no Auth Emulator e depois continue.", [{
+        showFirebaseStatus("Confirmação de e-mail pendente", "Confirme o e-mail usando a mensagem enviada pelo Firebase e depois continue.", [{
           label: "Já confirmei o e-mail",
           action: async () => {
             try {
               const refreshed = await firebaseAuth.reloadCurrentUser();
-              if (!refreshed?.emailVerified) throw new Error("O e-mail ainda não aparece como confirmado no emulador.");
+              if (!refreshed?.emailVerified) throw new Error("O e-mail ainda não aparece como confirmado. Abra o link recebido e tente novamente.");
               await showVerifiedAccount();
             } catch (error) { notify(error.message); }
           }
@@ -234,7 +238,7 @@
   register.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!firebaseMode) {
-      notify("O registo só funciona com o Firebase Emulator iniciado em localhost.");
+      notify("O registo só funciona quando um ambiente Firebase autorizado está conectado.");
       return;
     }
     const values = readRegistration();
@@ -246,13 +250,13 @@
       if (result.status === "verification-required") {
         showFirebaseStatus(
           "Conta de teste criada · confirme o e-mail",
-          "O utilizador " + values.email + " foi criado no Auth Emulator. Abra o painel do emulador em http://127.0.0.1:4000/auth, marque o e-mail como verificado e volte aqui. A empresa ainda não foi criada.",
+          "O utilizador " + values.email + " foi criado no Firebase Development. Abra a mensagem de confirmação enviada para esse endereço e depois volte aqui. A empresa ainda não foi criada.",
           [{
             label: "Já confirmei o e-mail",
             action: async () => {
               try {
                 const refreshed = await firebaseAuth.reloadCurrentUser();
-                if (!refreshed?.emailVerified) throw new Error("O Auth Emulator ainda não marcou este e-mail como confirmado.");
+                if (!refreshed?.emailVerified) throw new Error("O Firebase ainda não marcou este e-mail como confirmado. Abra o link recebido e tente novamente.");
                 const completed = await onboarding.completeAfterVerification(values);
                 if (completed.status === "complete") await showVerifiedAccount();
               } catch (error) { notify(error.message); }
@@ -283,7 +287,7 @@
     register.querySelectorAll("input,button").forEach((element) => { element.disabled = true; });
     demoButton.hidden = true;
   }
-  if (mode?.mode === "firebase-emulator") {
+  if (mode?.mode === "firebase-emulator" || mode?.mode === "firebase-development") {
     initializeFirebaseMode().catch((error) => {
       setNotice("Emulador não iniciado", error.message + " A demonstração não será aberta automaticamente.", "error");
       tabs.forEach((button) => { button.disabled = true; });
