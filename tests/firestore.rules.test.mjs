@@ -26,6 +26,10 @@ beforeEach(async () => {
     await setDoc(doc(db, "tenants", "tenant-b", "members", "owner-b"), { uid: "owner-b", tenantId: "tenant-b", role: "owner", status: "active" });
     await setDoc(doc(db, "tenants", "tenant-a", "appointments", "appointment-a"), { tenantId: "tenant-a", label: "private", clientId: "client-a", notes: "private notes" });
     await setDoc(doc(db, "tenants", "tenant-a", "clients", "client-a"), { tenantId: "tenant-a", name: "Cliente privado", phone: "+5511999999999" });
+    await setDoc(doc(db, "tenants", "tenant-a", "professionals", "professional-a"), { tenantId: "tenant-a", name: "Profissional", email: "private@example.com" });
+    await setDoc(doc(db, "tenants", "tenant-a", "services", "service-a"), { tenantId: "tenant-a", name: "Serviço", internalCost: 123 });
+    await setDoc(doc(db, "tenants", "tenant-a", "blocks", "block-a"), { tenantId: "tenant-a", reason: "Compromisso privado" });
+    await setDoc(doc(db, "tenants", "tenant-a", "scheduleSettings", "company"), { tenantId: "tenant-a", internal: true });
     await setDoc(doc(db, "publicBookingPages", "published"), { published: true, publicName: "Página pública" });
     await setDoc(doc(db, "publicBookingPages", "draft"), { published: false, publicName: "Rascunho" });
   });
@@ -38,6 +42,10 @@ test("active member reads tenant metadata but private agenda and client records 
   await assertSucceeds(getDoc(doc(db, "tenants", "tenant-a")));
   await assertFails(getDoc(doc(db, "tenants", "tenant-a", "appointments", "appointment-a")));
   await assertFails(getDoc(doc(db, "tenants", "tenant-a", "clients", "client-a")));
+  await assertFails(getDoc(doc(db, "tenants", "tenant-a", "professionals", "professional-a")));
+  await assertFails(getDoc(doc(db, "tenants", "tenant-a", "services", "service-a")));
+  await assertFails(getDoc(doc(db, "tenants", "tenant-a", "blocks", "block-a")));
+  await assertFails(getDoc(doc(db, "tenants", "tenant-a", "scheduleSettings", "company")));
 });
 
 test("member cannot read another tenant or another member's private membership", async () => {
