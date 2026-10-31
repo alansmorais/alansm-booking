@@ -1067,3 +1067,82 @@ export const getTenantMembers = onCall(
     };
   }
 );
+
+
+type SaveCatalogItemInput = {
+  tenantId?: unknown; kind?: unknown; itemId?: unknown; name?: unknown;
+  durationMinutes?: unknown; priceMinor?: unknown; currency?: unknown;
+  color?: unknown; status?: unknown;
+};
+
+/**
+ * Owner/admin catalog maintenance. Items are soft-deactivated so historical
+ * appointments keep their service/professional references intact.
+ */
+export const saveCatalogItem = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 10 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as SaveCatalogItemInput;
+    const tenantId = cleanText(input.tenantId, 128);
+    const kind = cleanText(input.kind, 24);
+    const itemId = cleanText(input.itemId, 128);
+    const name = cleanText(input.name, 100);
+    const status = cleanText(input.status || "active", 20);
+    if (!validDocumentId(tenantId) || !["service", "professional"].includes(kind) ||
+        !["active", "inactive"].includes(status) ||
+        (itemId && !validDocumentId(itemId))) {
+      throw new HttpsError("invalid-argument", "Dados do cadastro inválidos.");
+    }
+    await requireTenantManager(auth.uid, tenantId);
+    const collection = kind === "service" ? "services" : "professionals";
+    const ref = itemId
+      ? db.doc(`tenants/${tenantId}/${collection}/${itemId}`)
+      : db.collection(`tenants/${tenantId}/${collection}`).doc();
+    if (!itemId && status === "active" && name.length < 2) {
+      throw new HttpsError("invalid-argument", "Informe um nome com pelo menos 2 caracteres.");
+    }
+    if (kind === "service" && status === "active") {
+      if (!Number.isInteger(input.durationMinutes) || (input.durationMinutes as number) < 5 ||
+          (input.durationMinutes as number) > MAX_SERVICE_MINUTES ||
+          (input.durationMinutes as number) % 5 !== 0 ||
+          !Number.isSafeInteger(input.priceMinor) || (input.priceMinor as number) < 0 ||
+          !/^[A-Z]{3}$/.test(cleanText(input.currency, 3))) {
+        throw new HttpsError("invalid-argument", "Informe duração em múltiplos de 5 minutos, preço em unidades mínimas e moeda válida.");
+      }
+    }
+    if (kind === "professional" && status === "active" &&
+        input.color !== undefined && !/^#[0-9a-fA-F]{6}$/.test(String(input.color))) {
+      throw new HttpsError("invalid-argument", "A cor deve estar no formato hexadecimal #RRGGBB.");
+    }
+    const auditRef = db.collection(`tenants/${tenantId}/auditLog`).doc();
+    const now = FieldValue.serverTimestamp();
+    await db.runTransaction(async (tx) => {
+      const existing = await tx.get(ref);
+      if (itemId && !existing.exists) throw new HttpsError("not-found", "Cadastro não encontrado.");
+      if (status === "active" && name.length < 2) {
+        throw new HttpsError("invalid-argument", "Informe um nome com pelo menos 2 caracteres.");
+      }
+      const previous = existing.data() || {};
+      const data: Record<string, unknown> = {
+        tenantId, name: name || cleanText(previous.name, 100),
+        status, updatedAt: now, updatedBy: auth.uid
+      };
+      if (!existing.exists) data.createdAt = now;
+      if (kind === "service" && status === "active") {
+        data.durationMinutes = input.durationMinutes;
+        data.priceMinor = input.priceMinor;
+        data.currency = cleanText(input.currency, 3).toUpperCase();
+      } else if (kind === "professional" && input.color !== undefined) {
+        data.color = String(input.color);
+      }
+      tx.set(ref, data, { merge: true });
+      tx.create(auditRef, {
+        tenantId, actorUid: auth.uid,
+        action: `${kind}.${existing.exists ? (status === "inactive" ? "deactivated" : "updated") : "created"}`,
+        resourceType: kind, resourceId: ref.id, createdAt: now
+      });
+    });
+    return { ok: true, kind, itemId: ref.id, status };
+  }
+);
