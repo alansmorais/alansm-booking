@@ -4,12 +4,12 @@ const allowedHosts = new Set(["localhost", "127.0.0.1", "::1"]);
 const enabled = params.get("firebaseEmulator") === "1" &&
   allowedHosts.has(window.location.hostname);
 
-window.BookingFirebaseRuntime = Object.freeze({
+window.BookingFirebaseRuntime = {
   mode: enabled ? "firebase-emulator" : "demo",
   enabled,
   ready: null,
   error: null
-});
+};
 
 if (enabled) {
   window.BookingFirebaseRuntime.ready = (async () => {
