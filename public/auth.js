@@ -322,6 +322,12 @@
       demoButton.hidden = true;
     });
   } else if (mode?.mode === "demo") {
-    setNotice("Modo demonstração", "Os dados são fictícios e ficam apenas neste navegador. Para testar autenticação, inicie os emuladores locais e use ?backend=firebase-emulator em localhost.");
+    title.textContent = "Ambiente de teste";
+    login.hidden = true;
+    register.hidden = true;
+    gate.querySelector(".auth-tabs").hidden = true;
+    demoButton.hidden = false;
+    demoButton.textContent = "Entrar no ambiente de teste →";
+    setNotice("Acesso livre para testes", "Entre diretamente sem e-mail, senha ou cadastro. Os dados são fictícios e ficam apenas neste navegador. O acesso Firebase autenticado é separado e só é iniciado quando solicitado explicitamente.");
   }
 })();
