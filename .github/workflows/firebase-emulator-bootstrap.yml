@@ -43,5 +43,9 @@ jobs:
         run: npm run test:firebase-adapters
       - name: Test onboarding verification flow
         run: npm run test:onboarding
+      - name: Install root test dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run Firestore rules and Functions integration tests in emulators
+        run: npx --yes firebase-tools emulators:exec --project demo-alansm-booking --only auth,firestore,functions "npm test"
       - name: Validate Firebase emulator configuration
         run: node -e "const f=require('./firebase.json'); if(f.emulators.auth.port!==9099||f.emulators.firestore.port!==8080||f.emulators.functions.port!==5001) process.exit(1); console.log('Emulator ports validated')"
