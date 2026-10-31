@@ -32,7 +32,7 @@
         <label>Endereço público pretendido<input name="slug" maxlength="40" placeholder="barbearia-central" required><small class="auth-field-hint" id="slugPreview">O endereço será usado no link público da sua empresa.</small></label>
         <button class="primary-btn auth-submit" type="submit">Preparar a minha conta</button>
       </form>
-      <div class="auth-notice"><strong>Autenticação Firebase em preparação</strong><span>O registo e o login ainda não estão ligados a um serviço real. Não introduza palavras-passe verdadeiras nesta demonstração.</span></div>
+      <div class="auth-notice"><strong>Estado da ligação</strong><span id="authNoticeText">A preparar o ambiente de autenticação...</span><button type="button" class="secondary-btn" id="completeVerification" hidden>Já confirmei o meu e-mail</button></div>
       <button type="button" class="auth-demo" id="enterDemo">Continuar na demonstração local <span>→</span></button>
     </div>
   </section>
@@ -90,6 +90,6 @@
   <script src="./team.js"></script>
   <script src="./app.js"></script>
   <script src="./auth.js"></script>
-  <script type="module" src="./firebase-init.js"></script>
+  <script src="./firebase-init.js"></script>
 </body>
 </html>
