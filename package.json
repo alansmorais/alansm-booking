@@ -13,7 +13,9 @@
     "test:firebase-adapters": "node --test tests/firebase-auth-adapter.test.mjs tests/firebase-workspace-adapter.test.mjs",
     "test:invitation": "node --test tests/invitation-flow.test.mjs",
     "test:invitation-page": "node --test tests/invitation-page.test.mjs",
-    "test:team": "node --test tests/team.test.mjs"
+    "test:team": "node --test tests/team.test.mjs",
+    "test:firebase-emulator": "node --test tests/firebase-emulator.test.mjs",
+    "test:all-adapters": "npm run test:adapter && npm run test:auth-adapter && npm run test:workspace-adapter && npm run test:onboarding && npm run test:invitation && npm run test:invitation-page && npm run test:firebase-adapters && npm run test:firebase-emulator && npm run test:team"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",
