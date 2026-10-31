@@ -239,7 +239,10 @@
     }
     const values = readRegistration();
     try {
-      const result = await onboarding.registerAndCreateWorkspace(values);
+      const currentUser = firebaseAuth.getCurrentUser();
+      const result = currentUser?.emailVerified
+        ? await onboarding.completeAfterVerification(values)
+        : await onboarding.registerAndCreateWorkspace(values);
       if (result.status === "verification-required") {
         showFirebaseStatus(
           "Conta de teste criada · confirme o e-mail",
@@ -267,10 +270,19 @@
   });
 
   selectTab("login");
-  const mode = window.BookingFirebaseConfig?.resolveMode({
-    search: window.location.search,
-    hostname: window.location.hostname
-  });
+  let mode = null;
+  try {
+    mode = window.BookingFirebaseConfig?.resolveMode({
+      search: window.location.search,
+      hostname: window.location.hostname
+    });
+  } catch (error) {
+    setNotice("Emulador bloqueado", error.message, "error");
+    tabs.forEach((button) => { button.disabled = true; });
+    login.querySelectorAll("input,button").forEach((element) => { element.disabled = true; });
+    register.querySelectorAll("input,button").forEach((element) => { element.disabled = true; });
+    demoButton.hidden = true;
+  }
   if (mode?.mode === "firebase-emulator") {
     initializeFirebaseMode().catch((error) => {
       setNotice("Emulador não iniciado", error.message + " A demonstração não será aberta automaticamente.", "error");
