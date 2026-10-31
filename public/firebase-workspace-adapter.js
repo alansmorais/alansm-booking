@@ -248,7 +248,7 @@
         const normalizedPhone = String(phone || "").trim();
         const normalizedNotes = String(notes || "").trim();
         if (normalizedName.length < 2 || normalizedName.length > 100) throw new Error("Informe um nome entre 2 e 100 caracteres.");
-        if (normalizedEmail && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) throw new Error("Informe um e-mail válido.");
+        if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) throw new Error("Informe um e-mail válido.");
         if (normalizedPhone.length > 40 || normalizedNotes.length > 500) throw new Error("Contacto ou observações demasiado longos.");
         if (typeof active !== "boolean") throw new Error("Estado do cliente inválido.");
         return invoke("saveTenantClient", {
