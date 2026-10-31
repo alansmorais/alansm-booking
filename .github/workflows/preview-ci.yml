@@ -42,8 +42,11 @@ jobs:
           node --check public/data-adapter.js
           node --check public/team.js
           node --check tests/team.test.mjs
-      - name: Test demo data adapter
-        run: npm run test:adapter && npm run test:auth-adapter && npm run test:workspace-adapter && npm run test:onboarding && npm run test:invitation && npm run test:invitation-page && npm run test:firebase-adapters && npm run test:team
+      - name: Install frontend test dependencies
+        run: npm install
+
+      - name: Run complete frontend adapter and demo test suite
+        run: npm run test:all-adapters
 
       - name: Validate JSON configuration
         run: |
