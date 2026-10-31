@@ -357,9 +357,9 @@ function validDocumentId(value: string): boolean {
  * as a concurrency lock. Appointments may span UTC midnight, so both day guards
  * are included. Duration/price come from the service document, never the client.
  *
- * Business opening hours, breaks, leave and date exceptions are deliberately
- * not inferred here; they must be added to this transaction before enabling
- * real bookings.
+ * The transaction validates company/professional opening periods, breaks,
+ * date-specific closures and absences, and overlapping time blocks before
+ * writing the appointment. Local-midnight-crossing bookings are rejected.
  */
 export const createAppointment = onCall(
   { region: REGION, enforceAppCheck: false, maxInstances: 30 },
