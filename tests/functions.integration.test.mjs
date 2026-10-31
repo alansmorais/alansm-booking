@@ -389,6 +389,23 @@ test("createAppointment enforces idempotency and prevents overlapping concurrent
   assert.equal(replay.data.result.appointmentId, first.data.result.appointmentId);
   assert.equal(replay.data.result.replayed, true);
 
+  const reusedKey = await callable("createAppointment", {
+    ...payload, startAtMs: startAtMs + 4 * 60 * 60 * 1000
+  });
+  assert.equal(reusedKey.data.error?.status, "ALREADY_EXISTS", JSON.stringify(reusedKey.data));
+
+  const otherTenantId = `booking-isolation-${Date.now()}`;
+  await adminDb.doc(`tenants/${otherTenantId}`).set({
+    tenantId: otherTenantId, name: "Empresa isolada", status: "active",
+    timezone: "Europe/Warsaw", currency: "PLN"
+  });
+  const crossTenant = await callable("createAppointment", {
+    ...payload, tenantId: otherTenantId, idempotencyKey: `cross-tenant-${Date.now()}`
+  });
+  assert.equal(crossTenant.data.error?.status, "PERMISSION_DENIED", JSON.stringify(crossTenant.data));
+  const isolatedAppointments = await adminDb.collection(`tenants/${otherTenantId}/appointments`).get();
+  assert.equal(isolatedAppointments.size, 0, "A tentativa entre empresas não deve criar reservas.");
+
   const concurrentStart = startAtMs + 2 * 60 * 60 * 1000;
   const concurrentPayload = {
     ...payload, startAtMs: concurrentStart, notes: "Concorrência"
