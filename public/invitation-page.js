@@ -23,7 +23,7 @@
     if (invitation.status === "invalid") {
       panel.innerHTML = "<strong>Link de convite inválido</strong><p>O endereço está incompleto ou expirou. Peça à pessoa administradora para enviar um novo convite.</p>";
     } else {
-      panel.innerHTML = "<span class=\"invitation-kicker\">CONVITE PARA A EQUIPA</span><strong>Foi convidado para um espaço de trabalho</strong><p>Entre com o e-mail que recebeu o convite. A empresa confirmará o seu acesso depois da autenticação e da verificação do e-mail.</p><div class=\"invitation-actions\"><button type=\"button\" class=\"primary-btn\" data-invitation-login>Entrar na minha conta</button><button type=\"button\" class=\"secondary-btn\" data-invitation-register>Criar conta</button></div><small>Este preview ainda não aceita convites reais. A ligação será ativada quando a autenticação Firebase for aprovada e configurada.</small>";
+      panel.innerHTML = "<span class=\"invitation-kicker\">CONVITE PARA A EQUIPA</span><strong>Foi convidado para um espaço de trabalho</strong><p>Entre com o e-mail que recebeu o convite. A empresa confirmará o seu acesso depois da autenticação e da verificação do e-mail.</p><div class=\"invitation-actions\"><button type=\"button\" class=\"primary-btn\" data-invitation-login>Entrar na minha conta</button><button type=\"button\" class=\"secondary-btn\" data-invitation-register>Criar conta</button></div><small>O convite será aceite depois de entrar ou criar uma conta e confirmar o e-mail. O endereço convidado deve corresponder ao e-mail da sua conta.</small>";
       panel.querySelector("[data-invitation-login]").addEventListener("click", () => {
         if (typeof onChooseAccess === "function") onChooseAccess("login");
       });
