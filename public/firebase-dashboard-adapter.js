@@ -16,6 +16,7 @@
     if (!workspace || workspace.mode !== "firebase") {
       throw new TypeError("O workspace Firebase é obrigatório.");
     }
+    let activeTimeZone = text(timeZone, "UTC");
     const professionalNames = new Map();
     const serviceNames = new Map();
     const professionalName = (id) => professionalNames.get(id) || id || "";
@@ -45,6 +46,7 @@
     async function loadSchedule({ startDate, endDate, ...options } = {}) {
       if (!professionalNames.size) await loadCatalog(options);
       const result = await workspace.getSchedule({ ...options, startDate, endDate });
+      activeTimeZone = text(result.timezone, activeTimeZone);
       return {
         companySchedule: result.companySchedule || {},
         professionalSchedules: Object.fromEntries(Object.entries(result.professionalSchedules || {}).map(([id, days]) => [professionalName(id), days])),
@@ -68,7 +70,7 @@
     async function loadAgenda({ startAtMs, endAtMs, ...options } = {}) {
       if (!professionalNames.size || !serviceNames.size) await loadCatalog(options);
       const result = await workspace.getAgenda({ ...options, startAtMs, endAtMs });
-      const zone = text(timeZone, "UTC");
+      const zone = activeTimeZone;
       return {
         appointments: (result.appointments || []).map((item) => {
           const start = clock(item.startAtMs, zone);
