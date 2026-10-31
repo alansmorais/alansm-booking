@@ -218,8 +218,8 @@ export const cancelAppointment = onCall(
     const appointmentId = cleanText(input.appointmentId, 128);
     const reason = cleanText(input.reason, 240);
 
-    if (!tenantId || !appointmentId) {
-      throw new HttpsError("invalid-argument", "Empresa e reserva são obrigatórias.");
+    if (!validDocumentId(tenantId) || !validDocumentId(appointmentId)) {
+      throw new HttpsError("invalid-argument", "Empresa ou identificador da reserva inválido.");
     }
 
     const user = await getAuth().getUser(auth.uid);
