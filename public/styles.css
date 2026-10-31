@@ -81,3 +81,5 @@
 .service-image-control input[type=file]{max-width:100%;font:10px 'DM Sans'}
 .service-image-control small{font-size:9px;color:#8791a2;line-height:1.5}
 .service-image-control .text-link{justify-self:start;padding:2px 0}
+
+.service-image-preview[hidden],.service-image-placeholder[hidden]{display:none!important}
