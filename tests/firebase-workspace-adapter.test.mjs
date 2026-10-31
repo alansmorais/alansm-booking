@@ -264,3 +264,55 @@ test("Firebase workspace reads a bounded schedule for the selected tenant", asyn
   assert.equal(calls.at(-1).payload.startDate, "2026-10-01");
   await assert.rejects(adapter.getSchedule({ startDate: "2026-01-01", endDate: "2026-04-15" }), /até 90 dias/);
 });
+
+
+test("Firebase workspace validates and persists schedule settings, exceptions and blocks", async () => {
+  const calls = [];
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async payload => {
+        calls.push({ name, payload });
+        if (name === "getSession") return { data: { tenants: [{ tenantId: "tenant-schedule-write", name: "Empresa" }] } };
+        return { data: { ok: true, name } };
+      };
+    }
+  });
+  const days = { "1": [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }] };
+  await adapter.saveScheduleSettings({ scope: "company", days });
+  await adapter.saveScheduleSettings({ scope: "professional", professionalId: "pro-1", days });
+  await adapter.saveScheduleException({ kind: "companyClosure", startDate: "2026-11-02", endDate: "2026-11-03", reason: "Feriado" });
+  await adapter.saveScheduleException({ kind: "professionalAbsence", professionalId: "pro-1", startDate: "2026-11-04", reason: "Folga" });
+  await adapter.saveScheduleBlock({ date: "2026-11-05", start: "10:00", end: "11:00", professionalId: "pro-1", reason: "Compromisso" });
+  await adapter.saveScheduleBlock({ blockId: "block-1", date: "2026-11-05", remove: true });
+  const mutations = calls.filter(call => call.name !== "getSession");
+  assert.deepEqual(mutations.map(call => call.name), [
+    "saveScheduleSettings", "saveScheduleSettings", "saveScheduleException",
+    "saveScheduleException", "saveScheduleBlock", "saveScheduleBlock"
+  ]);
+  assert.ok(mutations.every(call => call.payload.tenantId === "tenant-schedule-write"));
+  assert.equal(mutations[1].payload.professionalId, "pro-1");
+  assert.equal(mutations[2].payload.kind, "companyClosure");
+  assert.equal(mutations[4].payload.start, "10:00");
+  assert.equal(mutations[5].payload.remove, true);
+});
+
+test("Firebase workspace rejects invalid schedule mutations before calling Functions", async () => {
+  let writes = 0;
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async () => {
+        if (name === "getSession") return { data: { tenants: [{ tenantId: "tenant-schedule-write", name: "Empresa" }] } };
+        writes += 1;
+        return { data: {} };
+      };
+    }
+  });
+  await assert.rejects(adapter.saveScheduleSettings({ days: { "1": [{ start: "18:00", end: "09:00" }] } }), /funcionamento inválido/);
+  await assert.rejects(adapter.saveScheduleException({ kind: "companyClosure", startDate: "2026-02-30" }), /indisponibilidade inválido/);
+  await assert.rejects(adapter.saveScheduleBlock({ date: "2026-11-05", start: "12:00", end: "11:00" }), /bloqueio inválido/);
+  assert.equal(writes, 0);
+});
