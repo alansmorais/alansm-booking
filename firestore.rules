@@ -21,8 +21,8 @@ service cloud.firestore {
     }
 
     match /tenants/{tenantId} {
-      allow get: if activeMember(tenantId);
-      allow list, create, update, delete: if false;
+      // Tenant metadata is served through authenticated callable APIs only.
+      allow read, write: if false;
 
       match /members/{userId} {
         allow get: if signedIn() && request.auth.uid == userId;
@@ -62,8 +62,8 @@ service cloud.firestore {
       }
 
       match /auditLog/{eventId} {
-        allow read: if hasRole(tenantId, ['owner', 'admin']);
-        allow write: if false;
+        // Audit history is private and must be exposed only through a bounded admin API.
+        allow read, write: if false;
       }
     }
 
