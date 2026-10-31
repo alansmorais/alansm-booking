@@ -52,3 +52,14 @@
 .invitation-actions button{min-height:40px}
 .invitation-card small{font-size:9px;line-height:1.6;color:#8a7955}
 @media(max-width:420px){.invitation-actions{grid-template-columns:1fr}}
+
+.auth-status{display:grid;gap:12px;margin-top:18px;padding:16px;border:1px solid #dce5f5;background:#f7f9ff;border-radius:12px}
+.auth-status[hidden]{display:none}
+.auth-status strong{font-size:13px;color:#24365c}
+.auth-status p{margin:0;color:#64718a;font-size:11px;line-height:1.65}
+.auth-status button{width:100%;padding:11px}
+.auth-status .secondary-btn{border:1px solid #d8deea;background:#fff;color:#53617a;border-radius:8px;font:600 11px 'DM Sans';cursor:pointer}
+.auth-notice[data-kind="success"]{border-color:#cce9dc;background:#f2fbf6}
+.auth-notice[data-kind="success"] strong{color:#16734c}
+.auth-notice[data-kind="error"]{border-color:#f1d1d1;background:#fff6f6}
+.auth-notice[data-kind="error"] strong{color:#a13e3e}
