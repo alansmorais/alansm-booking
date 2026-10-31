@@ -415,6 +415,35 @@ test("staff cannot create invitations or manage members", async () => {
   assert.notEqual(result.data.result?.ok, true);
 });
 
+test("staff cannot mutate catalog or company schedule", async () => {
+  const list = await callable("getTenantMembers", { tenantId });
+  const staff = list.data.result.members.find((member) => member.role === "staff" && member.status === "active");
+  assert.ok(staff);
+  const user = await adminAuth.getUser(staff.uid);
+  const customToken = await adminAuth.createCustomToken(user.uid);
+  const signedIn = await jsonRequest(`${AUTH}/accounts:signInWithCustomToken?key=fake-api-key`, {
+    token: customToken, returnSecureToken: true
+  });
+  assert.equal(signedIn.status, 200, JSON.stringify(signedIn.data));
+
+  const catalog = await callable("saveTenantCatalogItem", {
+    tenantId, kind: "service", name: "Tentativa staff", durationMinutes: 30,
+    priceMinor: 5000, currency: "PLN"
+  }, signedIn.data.idToken);
+  assert.equal(catalog.data.error?.status, "PERMISSION_DENIED", JSON.stringify(catalog.data));
+
+  const schedule = await callable("saveScheduleSettings", {
+    tenantId, scope: "company", days: { "1": [{ start: "09:00", end: "17:00", breaks: [] }] }
+  }, signedIn.data.idToken);
+  assert.equal(schedule.data.error?.status, "PERMISSION_DENIED", JSON.stringify(schedule.data));
+
+  const block = await callable("saveScheduleBlock", {
+    tenantId, date: new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10),
+    start: "14:00", end: "15:00", reason: "Tentativa staff"
+  }, signedIn.data.idToken);
+  assert.equal(block.data.error?.status, "PERMISSION_DENIED", JSON.stringify(block.data));
+});
+
 
 test("createAppointment enforces idempotency and prevents overlapping concurrent bookings", async () => {
   const professionalId = "booking-test-professional";
