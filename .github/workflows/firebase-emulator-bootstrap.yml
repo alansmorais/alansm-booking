@@ -23,6 +23,8 @@ jobs:
           npm run test:functions:build
       - name: Test stable dashboard snapshot mapping
         run: npm run test:snapshot
+      - name: Test Firebase dashboard read-model adapter
+        run: npm run test:firebase-dashboard
       - name: Check JavaScript syntax
         run: |
           node --check public/firebase-emulator.js
@@ -32,6 +34,7 @@ jobs:
           node --check public/booking-demo.js
           node --check public/firebase-auth-adapter.js
           node --check public/firebase-workspace-adapter.js
+          node --check public/firebase-dashboard-adapter.js
           node --check public/onboarding-flow.js
       - name: Test customer booking demo logic
         run: npm run test:booking-demo
