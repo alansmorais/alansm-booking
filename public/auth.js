@@ -148,13 +148,13 @@
     const list = tenants.map((tenant) => tenant.name + " (" + tenant.role + ")").join(", ");
     showFirebaseStatus(
       "Autenticação Firebase conectada",
-      "Sessão: " + (user.email || "utilizador") + ". Empresas: " + list + ". A criação e a leitura da sessão já usam Cloud Functions no Emulator. O painel operacional ainda não está integrado ao Firestore; por segurança, os dados de demonstração não serão apresentados como dados reais.",
+      "Sessão: " + (user.email || "utilizador") + ". Empresas: " + list + ". A criação e a leitura da sessão já usam Cloud Functions no ambiente conectado. O painel operacional ainda não está integrado ao Firestore; por segurança, os dados de demonstração não serão apresentados como dados reais.",
       [{
         label: "Terminar sessão",
         action: async () => {
           await firebaseAuth.signOut();
           showAuthForms();
-          setNotice("Sessão terminada", "A conta foi desconectada do Firebase Emulator.");
+          setNotice("Sessão terminada", "A conta foi desconectada do ambiente " + firebaseModeName + ".");
         }
       }]
     );
