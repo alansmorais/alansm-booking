@@ -32,7 +32,7 @@
         <label>Endereço público pretendido<input name="slug" maxlength="40" placeholder="barbearia-central" required><small class="auth-field-hint" id="slugPreview">O endereço será usado no link público da sua empresa.</small></label>
         <button class="primary-btn auth-submit" type="submit">Preparar a minha conta</button>
       </form>
-      <div class="auth-notice"><strong>Autenticação Firebase em preparação</strong><span>O registo e o login ainda não estão ligados a um serviço real. Não introduza palavras-passe verdadeiras nesta demonstração.</span></div>
+      <div class="auth-notice" id="authNotice" role="status" aria-live="polite"><strong id="authNoticeTitle">Modo demonstração</strong><span id="authNoticeText">Os dados são fictícios e ficam apenas neste navegador. Para testar autenticação, inicie os emuladores locais e use ?backend=firebase-emulator em localhost.</span></div><div id="authStatus" class="auth-status" hidden></div>
       <button type="button" class="auth-demo" id="enterDemo">Continuar na demonstração local <span>→</span></button>
     </div>
   </section>
