@@ -200,6 +200,50 @@ test("getTenantCatalog denies access to a tenant without membership", async () =
   assert.equal(result.data.error?.status, "PERMISSION_DENIED", JSON.stringify(result.data));
 });
 
+
+test("owner can create, update and deactivate tenant services and professionals", async () => {
+  const service = await callable("saveTenantCatalogItem", {
+    tenantId, kind: "service", name: "Corte teste", durationMinutes: 30,
+    priceMinor: 5500, currency: "PLN"
+  });
+  assert.equal(service.data.result?.ok, true, JSON.stringify(service.data));
+  const serviceId = service.data.result.itemId;
+  const professional = await callable("saveTenantCatalogItem", {
+    tenantId, kind: "professional", name: "Profissional teste", color: "#123ABC"
+  });
+  assert.equal(professional.data.result?.ok, true, JSON.stringify(professional.data));
+  const professionalId = professional.data.result.itemId;
+  const updated = await callable("saveTenantCatalogItem", {
+    tenantId, kind: "service", itemId: serviceId, name: "Corte atualizado",
+    durationMinutes: 45, priceMinor: 6500, currency: "PLN"
+  });
+  assert.equal(updated.data.result?.status, "active", JSON.stringify(updated.data));
+  const disabled = await callable("saveTenantCatalogItem", {
+    tenantId, kind: "professional", itemId: professionalId, active: false
+  });
+  assert.equal(disabled.data.result?.status, "inactive", JSON.stringify(disabled.data));
+  const catalog = await callable("getTenantCatalogForManagement", { tenantId });
+  assert.equal(catalog.data.result?.ok, true, JSON.stringify(catalog.data));
+  assert.ok(catalog.data.result.services.some(item =>
+    item.id === serviceId && item.name === "Corte atualizado" && item.durationMinutes === 45));
+  assert.ok(catalog.data.result.professionals.some(item =>
+    item.id === professionalId && item.status === "inactive"));
+  const bookingCatalog = await callable("getTenantCatalog", { tenantId });
+  assert.ok(!bookingCatalog.data.result.professionals.some(item => item.id === professionalId));
+});
+
+test("catalog management rejects invalid service values and unauthorized tenants", async () => {
+  const invalid = await callable("saveTenantCatalogItem", {
+    tenantId, kind: "service", name: "Serviço inválido",
+    durationMinutes: 17, priceMinor: -1, currency: "PLN"
+  });
+  assert.equal(invalid.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(invalid.data));
+  const denied = await callable("saveTenantCatalogItem", {
+    tenantId: "tenant-not-owned-by-user", kind: "professional", name: "Não autorizado"
+  });
+  assert.equal(denied.data.error?.status, "PERMISSION_DENIED", JSON.stringify(denied.data));
+});
+
 test("getAgendaAppointments accepts a bounded date window and rejects windows over 31 days", async () => {
   const startAtMs = Date.now();
   const valid = await callable("getAgendaAppointments", {
