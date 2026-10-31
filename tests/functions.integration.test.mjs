@@ -173,6 +173,44 @@ test("getTenantCatalog returns a bounded safe catalog for an active member", asy
   assert.equal("clients" in result.data.result, false);
 });
 
+test("tenant members can create, read, update and deactivate clients", async () => {
+  const created = await callable("saveTenantClient", {
+    tenantId, name: "Ana Cliente", phone: "+48 600 700 800",
+    email: "ANA@example.test", notes: "Prefere manhã"
+  });
+  assert.equal(created.data.result?.ok, true, JSON.stringify(created.data));
+  const clientId = created.data.result.clientId;
+  assert.ok(clientId);
+  const saved = await adminDb.doc(`tenants/${tenantId}/clients/${clientId}`).get();
+  assert.equal(saved.data().name, "Ana Cliente");
+  assert.equal(saved.data().email, "ana@example.test");
+  const listed = await callable("getTenantClients", { tenantId });
+  assert.equal(listed.data.result?.ok, true, JSON.stringify(listed.data));
+  assert.ok(listed.data.result.clients.some((client) => client.id === clientId));
+  const updated = await callable("saveTenantClient", {
+    tenantId, clientId, name: "Ana Silva", phone: "+48 600 700 801",
+    email: "ana.silva@example.test", notes: "Atualizado"
+  });
+  assert.equal(updated.data.result?.status, "active", JSON.stringify(updated.data));
+  const deactivated = await callable("saveTenantClient", {
+    tenantId, clientId, status: "inactive"
+  });
+  assert.equal(deactivated.data.result?.status, "inactive", JSON.stringify(deactivated.data));
+  const afterDeactivate = await callable("getTenantClients", { tenantId });
+  assert.ok(!afterDeactivate.data.result.clients.some((client) => client.id === clientId));
+  const invalid = await callable("saveTenantClient", {
+    tenantId, name: "X", email: "email-inválido"
+  });
+  assert.equal(invalid.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(invalid.data));
+  const otherTenantId = `client-isolation-${Date.now()}`;
+  await adminDb.doc(`tenants/${otherTenantId}`).set({
+    tenantId: otherTenantId, name: "Outra empresa", status: "active",
+    timezone: "Europe/Warsaw", currency: "PLN"
+  });
+  const crossTenant = await callable("getTenantClients", { tenantId: otherTenantId });
+  assert.equal(crossTenant.data.error?.status, "PERMISSION_DENIED", JSON.stringify(crossTenant.data));
+});
+
 test("getTenantCatalog denies access to a tenant without membership", async () => {
   const result = await callable("getTenantCatalog", { tenantId: "tenant-not-owned-by-user" });
   assert.equal(result.data.error?.status, "PERMISSION_DENIED", JSON.stringify(result.data));
