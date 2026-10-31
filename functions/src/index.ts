@@ -423,7 +423,7 @@ export const createAppointment = onCall(
       }
       if (!serviceSnap.exists || serviceSnap.data()?.status !== "active" ||
           !professionalSnap.exists || professionalSnap.data()?.status !== "active" ||
-          !clientSnap.exists) {
+          !clientSnap.exists || clientSnap.data()?.status === "inactive") {
         throw new HttpsError("failed-precondition", "Profissional, serviço ou cliente indisponível.");
       }
 
