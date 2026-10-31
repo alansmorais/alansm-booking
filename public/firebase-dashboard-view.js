@@ -141,21 +141,31 @@
       if (["owner","admin"].includes(tenant.role) && workspace?.saveScheduleSettings && workspace?.saveScheduleException && workspace?.saveScheduleBlock) {
         const schedulePanel=document.createElement("section");
         schedulePanel.className="firebase-readonly-section firebase-management firebase-schedule-management";
-        schedulePanel.innerHTML='<h2>Gestão de horários e disponibilidade</h2><p>Configure o horário semanal, feriados, ausências e bloqueios. As alterações são registadas no Firebase.</p><div class="firebase-management-status" data-schedule-status role="status">Pronto para editar.</div><form class="firebase-management-form" data-week-form><h3>Horário semanal da empresa</h3><div class="schedule-days" data-days></div><div class="firebase-management-actions"><button class="primary-btn" type="submit">Guardar horário semanal</button></div></form><form class="firebase-management-form" data-exception-form><h3>Fecho ou ausência</h3><label>Tipo<select name="kind"><option value="companyClosure">Fecho da empresa</option><option value="professionalAbsence">Ausência de profissional</option></select></label><label>Profissional<select name="professionalId"><option value="">Selecione</option></select></label><label>Data inicial<input name="startDate" type="date" required></label><label>Data final<input name="endDate" type="date"></label><label>Motivo<input name="reason" maxlength="240" placeholder="Feriado, férias…"></label><div class="firebase-management-actions"><button class="primary-btn" type="submit">Guardar indisponibilidade</button></div></form><form class="firebase-management-form" data-block-form><h3>Bloquear horário</h3><label>Data<input name="date" type="date" required></label><label>Início<input name="start" type="time" required></label><label>Fim<input name="end" type="time" required></label><label>Profissional<select name="professionalId"><option value="">Toda a empresa</option></select></label><label>Motivo<input name="reason" maxlength="240" placeholder="Pausa, compromisso…"></label><div class="firebase-management-actions"><button class="primary-btn" type="submit">Criar bloqueio</button></div></form><div class="schedule-current"><h3>Bloqueios existentes</h3><div data-block-list></div></div>';
+        schedulePanel.innerHTML='<h2>Gestão de horários e disponibilidade</h2><p>Configure o horário semanal, feriados, ausências e bloqueios. As alterações são registadas no Firebase.</p><div class="firebase-management-status" data-schedule-status role="status">Pronto para editar.</div><form class="firebase-management-form" data-week-form><h3>Horário semanal</h3><label>Aplicar a<select name="scope"><option value="company">Empresa</option><option value="professional">Profissional</option></select></label><label data-week-professional-wrap>Profissional<select name="professionalId"><option value="">Selecione</option></select></label><div class="schedule-days" data-days></div><div class="firebase-management-actions"><button class="primary-btn" type="submit">Guardar horário semanal</button></div></form><form class="firebase-management-form" data-exception-form><h3>Fecho ou ausência</h3><label>Tipo<select name="kind"><option value="companyClosure">Fecho da empresa</option><option value="professionalAbsence">Ausência de profissional</option></select></label><label>Profissional<select name="professionalId"><option value="">Selecione</option></select></label><label>Data inicial<input name="startDate" type="date" required></label><label>Data final<input name="endDate" type="date"></label><label>Motivo<input name="reason" maxlength="240" placeholder="Feriado, férias…"></label><div class="firebase-management-actions"><button class="primary-btn" type="submit">Guardar indisponibilidade</button></div></form><form class="firebase-management-form" data-block-form><h3>Bloquear horário</h3><label>Data<input name="date" type="date" required></label><label>Início<input name="start" type="time" required></label><label>Fim<input name="end" type="time" required></label><label>Profissional<select name="professionalId"><option value="">Toda a empresa</option></select></label><label>Motivo<input name="reason" maxlength="240" placeholder="Pausa, compromisso…"></label><div class="firebase-management-actions"><button class="primary-btn" type="submit">Criar bloqueio</button></div></form><div class="schedule-current"><h3>Bloqueios existentes</h3><div data-block-list></div></div>';
         data.append(schedulePanel);
         const scheduleStatus=schedulePanel.querySelector("[data-schedule-status]");
         const weekForm=schedulePanel.querySelector("[data-week-form]");
         const exceptionForm=schedulePanel.querySelector("[data-exception-form]");
         const blockForm=schedulePanel.querySelector("[data-block-form]");
         const daysHost=schedulePanel.querySelector("[data-days]");
-        const dayNames=["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"];
-        daysHost.innerHTML=dayNames.map((day,index)=>{
-          const periods=schedule.raw?.companySchedule?.[String(index)]||[];
-          const period=periods[0]||{};
-          return '<div class="schedule-day-row"><label class="schedule-day-enabled"><input type="checkbox" name="enabled_'+index+'" '+(periods.length?'checked':'')+'> '+day+'</label><label>Abre<input type="time" name="start_'+index+'" value="'+escape(period.start||"09:00")+'"></label><label>Fecha<input type="time" name="end_'+index+'" value="'+escape(period.end||"18:00")+'"></label></div>';
-        }).join("");
         const scheduleCatalog=await workspace.getCatalogForManagement({tenantId:tenant.tenantId});
         const scheduleProfessionals=Array.isArray(scheduleCatalog.professionals)?scheduleCatalog.professionals:[];
+        const weekScope=weekForm.elements.scope;
+        const weekProfessional=weekForm.elements.professionalId;
+        weekProfessional.innerHTML='<option value="">Selecione</option>'+scheduleProfessionals.filter(item=>item.status==="active").map(item=>'<option value="'+escape(item.id)+'">'+escape(item.name)+'</option>').join("");
+        const dayNames=["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"];
+        const renderWeekDays=()=>{
+          const source=weekScope.value==="company"?schedule.raw?.companySchedule:(schedule.raw?.professionalSchedules?.[weekProfessional.value]||{});
+          daysHost.innerHTML=dayNames.map((day,index)=>{
+            const periods=source?.[String(index)]||[];
+            const period=periods[0]||{};
+            return '<div class="schedule-day-row"><label class="schedule-day-enabled"><input type="checkbox" name="enabled_'+index+'" '+(periods.length?'checked':'')+'> '+day+'</label><label>Abre<input type="time" name="start_'+index+'" value="'+escape(period.start||"09:00")+'"></label><label>Fecha<input type="time" name="end_'+index+'" value="'+escape(period.end||"18:00")+'"></label></div>';
+          }).join("");
+        };
+        const toggleWeekScope=()=>{const professional=weekScope.value==="professional";weekForm.querySelector("[data-week-professional-wrap]").hidden=!professional;weekProfessional.required=professional;};
+        weekScope.addEventListener("change",()=>{toggleWeekScope();renderWeekDays();});
+        weekProfessional.addEventListener("change",renderWeekDays);
+        toggleWeekScope();renderWeekDays();
         const fillProfessionalOptions=(select,includeCompany)=>{
           select.innerHTML=(includeCompany?'<option value="">Toda a empresa</option>':'<option value="">Selecione</option>')+
             scheduleProfessionals.filter(item=>item.status==="active").map(item=>'<option value="'+escape(item.id)+'">'+escape(item.name)+'</option>').join("");
@@ -173,7 +183,9 @@
           try{
             const form=new FormData(weekForm);const days={};
             for(let day=0;day<=6;day++){days[String(day)]=form.get("enabled_"+day)?[{start:String(form.get("start_"+day)),end:String(form.get("end_"+day)),breaks:[]}]:[];}
-            await workspace.saveScheduleSettings({tenantId:tenant.tenantId,scope:"company",days});
+            const scope=weekScope.value;
+            if(scope==="professional"&&!weekProfessional.value)throw new Error("Selecione o profissional.");
+            await workspace.saveScheduleSettings({tenantId:tenant.tenantId,scope,professionalId:scope==="professional"?weekProfessional.value:"",days});
             await refreshSchedule("Horário semanal guardado.");
           }catch(error){scheduleStatus.textContent="Não foi possível guardar o horário: "+(error.message||"erro desconhecido");button.disabled=false;}
         });
