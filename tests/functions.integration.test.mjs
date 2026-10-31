@@ -616,6 +616,32 @@ test("createAppointment enforces idempotency and prevents overlapping concurrent
 });
 
 
+test("saveScheduleBlock preserves original creation metadata when edited", async () => {
+  const date = new Date(Date.now() + 13 * 86400000).toISOString().slice(0, 10);
+  const created = await callable("saveScheduleBlock", {
+    tenantId, date, start: "10:00", end: "11:00", reason: "Primeira versão"
+  });
+  assert.equal(created.data.result?.ok, true, JSON.stringify(created.data));
+  const blockId = created.data.result.blockId;
+  const ref = adminDb.doc(`tenants/${tenantId}/blocks/${blockId}`);
+  const before = (await ref.get()).data();
+  assert.ok(before.createdAt);
+  assert.ok(before.createdBy);
+
+  const updated = await callable("saveScheduleBlock", {
+    tenantId, date, blockId, start: "11:00", end: "12:00", reason: "Horário alterado"
+  });
+  assert.equal(updated.data.result?.ok, true, JSON.stringify(updated.data));
+  const after = (await ref.get()).data();
+  assert.equal(after.createdAt.toMillis(), before.createdAt.toMillis());
+  assert.equal(after.createdBy, before.createdBy);
+  assert.equal(after.start, "11:00");
+  assert.equal(after.reason, "Horário alterado");
+  assert.ok(after.updatedAt.toMillis() >= before.updatedAt.toMillis());
+
+  await callable("saveScheduleBlock", { tenantId, date, blockId, remove: true });
+});
+
 test("cancelAppointment cancels once, records audit and treats replay as idempotent", async () => {
   const appointmentId = `cancel-test-${Date.now()}`;
   const ref = adminDb.doc(`tenants/${tenantId}/appointments/${appointmentId}`);
