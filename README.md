@@ -1,43 +1,52 @@
 # AlanSM Booking
 
-Standalone multi-tenant booking SaaS for barbershops, beauty salons, and nail professionals.
+Standalone multi-tenant booking SaaS for barbershops, beauty salons, and independent beauty professionals.
 
 ## Repository workflow
 - `main`: stable branch; kept untouched during current development.
 - `preview`: development and validation branch.
 - This repository is independent from the AlanSM Solutions marketing website.
 
+## Architecture decision
+**Firebase is the selected primary backend for the SaaS.**
+- Firebase Authentication handles account identity and email verification.
+- Cloud Firestore stores tenant-scoped application data.
+- Firebase Cloud Functions enforce authorization and business rules for workspace and booking operations.
+- Firebase Emulator Suite is the required environment for frontend/backend integration development and automated tests.
+- The Google Apps Script + Google Sheets code under `apps-script/` is a legacy pilot prototype/reference only. It is not the selected production architecture and must not be wired into the primary application.
+
+Do not introduce a second backend or migrate the primary architecture without an explicit architecture review.
+
 ## Current preview status
-- Responsive demo dashboard with overview, weekly calendar, appointments, professionals, services, clients, public booking page placeholder and settings.
+- Responsive static dashboard with overview, weekly calendar, appointments, professionals, services, clients, public booking page placeholder and settings.
 - Demo availability engine intersects configurable company opening hours, each professional's individual weekly schedule, breaks, date exceptions, blocked time, service duration and appointment overlap checks.
-- Settings include an editable weekly company schedule, individual professional schedule overview, and date-specific company closures. Changes remain in browser memory only.
-- Demo booking form offers available 30-minute start slots and revalidates availability before adding an in-memory appointment.
-- Demo data is fictitious and held in browser memory only.
-- Initial Google Apps Script pilot foundation and spreadsheet schema are in `apps-script/`.
-- Data model and server-side invariants are documented in `docs/DATA_MODEL.md`.
-- Product audit and recommended implementation sequence are documented in `docs/PRODUCT_AUDIT.md`.
-- HTTP API intentionally remains disabled/fail-closed; real authentication, booking and persistence are not connected.
+- Demo data is fictitious and held locally in the browser; it is not synchronized to Firebase.
+- Firebase Auth and workspace adapter modules and callable Functions exist, but the primary frontend startup path still uses demo adapters.
+- The public booking journey is not published or connected.
+- Server-side booking validation and Firestore security rules have automated emulator tests. This does not mean the user-facing SaaS is connected or ready for real bookings.
 
-## Pilot architecture decision
-Google Sheets + Google Apps Script is the selected pilot direction. The earlier Firebase prototype remains a reference/rollback option and is not silently substituted.
+## Safety and release rules
+- Keep the demo as the default application mode.
+- Firebase frontend integration must be explicitly opt-in and emulator-only during development.
+- Never embed production credentials or enable a production Firebase project through a preview flag.
+- No production deployment, real customer data, payment provider, DNS or public booking domain may be connected without explicit approval.
+- Do not put credentials, tokens, project secrets or personal customer data in Git.
+- Do not accept real bookings until authentication, tenant authorization, availability validation, idempotency, concurrency handling, audit controls and end-to-end tests are complete.
+- Develop only in `preview`; keep `main` stable.
 
-## Safety
-- No production deployment has been performed.
-- No external spreadsheet, Apps Script project, payment provider, DNS or live customer data has been connected.
-- Do not put credentials, tokens, spreadsheet IDs or personal customer data in Git.
-- Do not enable booking endpoints before authentication, tenant authorization, locking, idempotency, validation and security tests are implemented.
-
-## Development plan
-1. Make the demo frontend honest, secure and coherent, including availability/calendar behavior.
-2. Validate authentication in a real Apps Script runtime.
-3. Implement tenant-scoped repositories and validated booking operations.
-4. Add a frontend adapter with local mock as the default.
-5. Test concurrency, duplicate submissions, cross-tenant access, token expiry/revocation and input sanitization.
-6. Only then prepare a controlled pilot deployment.
+## Development sequence
+1. Keep demo mode intact and make the emulator path explicit and fail-closed.
+2. Connect Firebase SDK initialization to local Auth, Firestore and Functions emulators only.
+3. Wire registration, login, email verification and session restoration.
+4. Wire tenant creation and workspace selection.
+5. Connect catalog and agenda reads.
+6. Implement schedule, team, client and appointment operations one domain at a time, with server-side validation and emulator integration tests.
+7. Keep public booking disabled until its customer-facing flow and abuse protections are implemented and tested.
+8. Perform a security and operational review before any controlled pilot with real users.
 
 ## Online preview
 The current static preview is available at:
 
 https://preview.alansm-booking-preview.pages.dev
 
-It is deployed from the `preview` branch. The `main` branch remains the stable branch and production deployments are disabled. The preview contains fictitious browser-only data; no real bookings are processed.
+It is deployed from the `preview` branch. The preview is not a production service and does not process real bookings.
