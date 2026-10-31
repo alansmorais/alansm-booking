@@ -1,91 +1,20 @@
 (() => {
-  const gate = document.getElementById("authGate");
-  if (!gate) return;
-
-  const auth = window.BookingAuth.createDemoAdapter();
-  const tabs = [...gate.querySelectorAll("[data-auth-tab]")];
-  const login = gate.querySelector("#authLoginForm");
-  const register = gate.querySelector("#authRegisterForm");
-  const title = gate.querySelector("#authTitle");
-  const businessName = register.querySelector('[name="businessName"]');
-  const slug = register.querySelector('[name="slug"]');
-  const slugPreview = gate.querySelector("#slugPreview");
-  let slugEdited = false;
-
-  slug.addEventListener("input", () => {
-    slugEdited = true;
-    updateSlugPreview();
-  });
-  businessName.addEventListener("input", () => {
-    if (!slugEdited) {
-      slug.value = window.BookingOnboarding.normalizeSlug(businessName.value);
-    }
-    updateSlugPreview();
-  });
-
-  function updateSlugPreview() {
-    const value = window.BookingOnboarding.normalizeSlug(slug.value);
-    slugPreview.textContent = value
-      ? "Link previsto: /" + value
-      : "O endereço será usado no link público da sua empresa.";
-  }
-
-  function notify(message) {
-    const toast = document.getElementById("toast");
-    if (!toast) return;
-    toast.textContent = message;
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 4200);
-  }
-
-  function selectTab(tab) {
-    const isRegister = tab === "register";
-    tabs.forEach((button) => {
-      const active = button.dataset.authTab === tab;
-      button.classList.toggle("active", active);
-      button.setAttribute("aria-selected", String(active));
-    });
-    login.hidden = isRegister;
-    register.hidden = !isRegister;
-    title.textContent = isRegister
-      ? "Crie o espaço da sua empresa"
-      : "Bem-vindo ao AlanSM Booking";
-  }
-
-  tabs.forEach((button) =>
-    button.addEventListener("click", () => selectTab(button.dataset.authTab))
-  );
-
-  gate.querySelector("#enterDemo")?.addEventListener("click", () => {
-    gate.hidden = true;
-    document.body.classList.add("demo-entered");
-  });
-
-  login.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    try {
-      await auth.signIn();
-    } catch (error) {
-      login.reset();
-      notify(error.message);
-    }
-  });
-
-  register.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    try {
-      await auth.register();
-    } catch (error) {
-      register.reset();
-      notify(error.message);
-    }
-  });
-
-  window.BookingInvitationPage?.mount({
-    gate,
-    search: window.location.search,
-    onChooseAccess: selectTab
-  });
-
-  selectTab("login");
+"use strict";
+const gate=document.getElementById("authGate"); if(!gate)return;
+const tabs=[...gate.querySelectorAll("[data-auth-tab]")],login=gate.querySelector("#authLoginForm"),register=gate.querySelector("#authRegisterForm"),title=gate.querySelector("#authTitle"),businessName=register.querySelector('[name="businessName"]'),slug=register.querySelector('[name="slug"]'),slugPreview=gate.querySelector("#slugPreview"),notice=gate.querySelector("#authNoticeText"),completeButton=gate.querySelector("#completeVerification"),registerSubmit=register.querySelector('[type="submit"]');
+let slugEdited=false,auth=window.BookingAuth.createDemoAdapter(),workspace=null,onboarding=null,currentUser=null,firebaseReady=false;
+function notify(message){const toast=document.getElementById("toast");if(!toast)return;toast.textContent=message;toast.classList.add("show");setTimeout(()=>toast.classList.remove("show"),4200);}
+function setNotice(message){if(notice)notice.textContent=message;}
+function selectTab(tab){const isRegister=tab==="register";tabs.forEach(button=>{const active=button.dataset.authTab===tab;button.classList.toggle("active",active);button.setAttribute("aria-selected",String(active));});login.hidden=isRegister;register.hidden=!isRegister;title.textContent=isRegister?(currentUser?"Prepare o espaço da sua empresa":"Crie o espaço da sua empresa"):"Bem-vindo ao AlanSM Booking";registerSubmit.textContent=currentUser?"Criar espaço da empresa":"Criar conta e enviar confirmação";}
+function values(form){return Object.fromEntries(new FormData(form).entries());}
+function businessDetails(){return {businessName:businessName.value.trim(),slug:window.BookingOnboarding.normalizeSlug(slug.value),timezone:"America/Sao_Paulo",currency:"BRL"};}
+function updateSlug(){const value=window.BookingOnboarding.normalizeSlug(slug.value);slugPreview.textContent=value?"Link previsto: /"+value:"O endereço será usado no link público da sua empresa.";}
+slug.addEventListener("input",()=>{slugEdited=true;updateSlug();});businessName.addEventListener("input",()=>{if(!slugEdited)slug.value=window.BookingOnboarding.normalizeSlug(businessName.value);updateSlug();});
+tabs.forEach(button=>button.addEventListener("click",()=>selectTab(button.dataset.authTab)));
+completeButton?.addEventListener("click",async()=>{if(!firebaseReady||!onboarding)return;completeButton.disabled=true;try{const result=await onboarding.completeAfterVerification(businessDetails());if(result.status==="complete"){currentUser=auth.getCurrentUser();completeButton.hidden=true;setNotice("E-mail confirmado e empresa criada no Firebase Emulator. O painel de gestão será ligado aos dados desta empresa na próxima etapa; a agenda da demonstração continua separada.");notify("Empresa criada no ambiente local.");}else setNotice("Ainda não conseguimos confirmar o e-mail. Abra o link de verificação enviado pelo Firebase Emulator e tente novamente.");}catch(error){setNotice(error.message||"Não foi possível concluir a criação da empresa.");}finally{completeButton.disabled=false;}});
+gate.querySelector("#enterDemo")?.addEventListener("click",()=>{gate.hidden=true;document.body.classList.add("demo-entered");});
+login.addEventListener("submit",async event=>{event.preventDefault();try{if(!firebaseReady)throw new Error("O login real só está disponível em localhost com os emuladores ativos e ?firebaseEmulator=1. A demonstração é separada.");const data=values(login);await auth.signIn({email:data.email.trim(),password:data.password});currentUser=await auth.reloadCurrentUser();if(!currentUser?.emailVerified){await auth.sendEmailVerification();setNotice("A conta existe, mas o e-mail ainda não foi confirmado. Abra o link de verificação nos registos do Firebase Emulator e volte a entrar.");notify("Confirmação de e-mail necessária.");return;}const session=await workspace.getSession();if(!session.tenants.length){selectTab("register");setNotice("Login confirmado. Esta conta ainda não tem uma empresa. Preencha o nome e o endereço público para criar o primeiro espaço.");return;}setNotice("Login confirmado. "+session.tenants.length+" espaço(s) de empresa encontrado(s). A ligação do painel aos dados reais será concluída na próxima etapa; a demonstração permanece isolada.");notify("Autenticação Firebase confirmada.");}catch(error){setNotice(error.message||"Não foi possível entrar.");}});
+register.addEventListener("submit",async event=>{event.preventDefault();try{if(!firebaseReady||!workspace||!onboarding)throw new Error("O cadastro Firebase está disponível apenas em localhost com o emulador ativo. Use a demonstração separada para explorar o painel.");const details=businessDetails();if(currentUser?.emailVerified){await workspace.createTenant({name:details.businessName,slug:details.slug,timezone:details.timezone,currency:details.currency});const session=await workspace.getSession();setNotice("Empresa criada com sucesso no Firebase Emulator. Espaços disponíveis: "+session.tenants.length+". A integração do painel será a próxima etapa.");notify("Espaço de empresa criado.");return;}const data=values(register);const result=await onboarding.registerAndCreateWorkspace({...details,email:data.email.trim(),password:data.password,displayName:data.displayName.trim()});if(result.status==="verification-required"){completeButton.hidden=false;setNotice("Conta criada no Firebase Emulator. Encontre o link de verificação nos registos do emulador, abra-o e depois clique em “Já confirmei o meu e-mail”. A empresa só será criada após a confirmação.");notify("Conta criada. Confirme o e-mail para continuar.");}else{setNotice("E-mail confirmado e empresa criada no Firebase Emulator. O painel será ligado a estes dados na próxima etapa.");notify("Conta e empresa criadas.");}}catch(error){setNotice(error.message||"Não foi possível concluir o cadastro.");}});
+async function initialize(){const runtime=window.BookingFirebaseRuntime;if(!runtime?.enabled||!runtime.ready){setNotice("Modo demonstração: cadastro e login reais estão desativados. Para testar a autenticação local, inicie os emuladores e abra esta página com ?firebaseEmulator=1 em localhost.");return;}try{const fb=await runtime.ready;auth=window.BookingFirebaseAuth.createFirebaseAuthAdapter({auth:fb.auth,createUserWithEmailAndPassword:fb.authSdk.createUserWithEmailAndPassword,signInWithEmailAndPassword:fb.authSdk.signInWithEmailAndPassword,signOut:fb.authSdk.signOut,updateProfile:fb.authSdk.updateProfile,sendEmailVerification:fb.authSdk.sendEmailVerification,reload:fb.authSdk.reload});workspace=window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({functions:fb.functions,httpsCallable:fb.functionsSdk.httpsCallable,authAdapter:auth});onboarding=window.BookingOnboarding.createOnboardingFlow({auth,workspace});firebaseReady=true;setNotice("Ambiente local conectado ao Firebase Emulator. Nenhum projeto de produção está configurado.");}catch(error){setNotice("Não foi possível iniciar o Firebase Emulator: "+(error.message||"erro desconhecido"));}}
+window.BookingAuthUI=Object.freeze({initialize});selectTab("login");initialize();
 })();
