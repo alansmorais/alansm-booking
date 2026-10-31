@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <meta name="description" content="AlanSM Booking — gestão inteligente de agendamentos.">
+  <title>AlanSM Booking · Painel</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
+    <div class="auth-card">
+      <a class="brand auth-brand" href="#" aria-label="AlanSM Booking"><span class="brand-mark">A</span><span>AlanSM <b>Booking</b></span></a>
+      <div class="auth-kicker">GESTÃO SIMPLES PARA O SEU NEGÓCIO</div>
+      <h1 id="authTitle">Bem-vindo ao AlanSM Booking</h1>
+      <p class="auth-subtitle">Entre na sua conta ou prepare o espaço de trabalho da sua empresa.</p>
+      <div class="auth-tabs" role="tablist" aria-label="Acesso à plataforma">
+        <button type="button" class="auth-tab active" data-auth-tab="login">Entrar</button>
+        <button type="button" class="auth-tab" data-auth-tab="register">Criar conta</button>
+      </div>
+      <form id="authLoginForm" class="auth-form">
+        <label>E-mail<input name="email" type="email" autocomplete="email" placeholder="voce@empresa.com" required></label>
+        <label>Palavra-passe<input name="password" type="password" autocomplete="current-password" placeholder="A sua palavra-passe" required minlength="8"></label>
+        <button class="primary-btn auth-submit" type="submit">Entrar na minha conta</button>
+      </form>
+      <form id="authRegisterForm" class="auth-form" hidden>
+        <label>O seu nome<input name="displayName" autocomplete="name" maxlength="80" placeholder="Nome completo" required></label>
+        <label>E-mail<input name="email" type="email" autocomplete="email" placeholder="voce@empresa.com" required></label>
+        <label>Palavra-passe<input name="password" type="password" autocomplete="new-password" minlength="8" placeholder="Mínimo de 8 caracteres" required></label>
+        <label>Nome da empresa<input name="businessName" maxlength="80" placeholder="Ex.: Barbearia Central" required></label>
+        <label>Endereço público pretendido<input name="slug" maxlength="40" placeholder="barbearia-central" required><small class="auth-field-hint" id="slugPreview">O endereço será usado no link público da sua empresa.</small></label>
+        <button class="primary-btn auth-submit" type="submit">Preparar a minha conta</button>
+      </form>
+      <div class="auth-notice" id="authNotice" role="status" aria-live="polite"><strong id="authNoticeTitle">Modo demonstração</strong><span id="authNoticeText">Os dados são fictícios e ficam apenas neste navegador. Para testar autenticação, inicie os emuladores locais e use ?backend=firebase-emulator em localhost.</span></div><div id="authStatus" class="auth-status" hidden></div>
+      <button type="button" class="auth-demo" id="enterDemo">Continuar na demonstração local <span>→</span></button>
+    </div>
+  </section>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#" aria-label="AlanSM Booking início">
+        <span class="brand-mark">A</span><span>AlanSM <b>Booking</b></span>
+      </a>
+      <div class="workspace">
+        <span class="workspace-avatar">B</span>
+        <span class="workspace-details"><strong id="workspaceName">Barbearia Modelo</strong><small id="workspaceRole">Plano demonstração</small></span>
+        <select id="workspaceSelect" aria-label="Selecionar empresa" title="Selecionar empresa"></select>
+      </div>
+      <p class="nav-label">MENU PRINCIPAL</p>
+      <nav class="navigation" aria-label="Menu principal">
+        <button class="nav-item active" data-view="overview"><span>▦</span> Visão geral</button>
+        <button class="nav-item" data-view="calendar"><span>▦</span> Agenda semanal</button>
+        <button class="nav-item" data-view="appointments"><span>▣</span> Agendamentos <i>4</i></button>
+        <button class="nav-item" data-view="professionals"><span>♙</span> Profissionais</button>
+        <button class="nav-item" data-view="services"><span>◇</span> Serviços</button>
+        <button class="nav-item" data-view="clients"><span>♧</span> Clientes</button>
+        <button class="nav-item" data-view="team"><span>♙</span> Equipe e acessos</button>
+      </nav>
+      <p class="nav-label settings-label">GESTÃO</p>
+      <nav class="navigation">
+        <button class="nav-item" data-view="public-page"><span>↗</span> Página de reservas</button>
+        <button class="nav-item" data-view="settings"><span>⚙</span> Configurações</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="help-card"><span class="help-icon">?</span><strong>Precisa de ajuda?</strong><small>Consulte o guia de utilização.</small><button type="button" id="helpButton">Ver guia <span>→</span></button></div>
+        <div class="profile"><span class="profile-avatar">AS</span><span><strong>Administrador</strong><small>Conta de demonstração</small></span><button aria-label="Opções da conta">···</button></div>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <button class="mobile-menu" id="menuToggle" aria-label="Abrir menu">☰</button>
+        <div class="breadcrumb">Workspace <span>/</span> <strong id="breadcrumbTitle">Visão geral</strong></div>
+        <div class="top-actions"><span class="demo-pill"><span></span> MODO DEMONSTRAÇÃO</span><button class="icon-button" aria-label="Notificações">♧<i></i></button><span class="top-avatar">AS</span></div>
+      </header>
+      <section class="content" id="content" aria-live="polite"></section>
+      <footer class="footer"><span>AlanSM Booking <b>·</b> MVP de demonstração</span><span>Os dados apresentados são fictícios.</span></footer>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="./availability.js"></script>
+  <script src="./data-adapter.js"></script>
+  <script src="./booking-snapshot.js"></script>
+  <script src="./auth-adapter.js"></script>
+  <script src="./workspace-adapter.js"></script>
+  <script src="./onboarding-flow.js"></script>
+  <script src="./invitation-flow.js"></script>
+  <script src="./invitation-page.js"></script>
+  <script src="./firebase-auth-adapter.js"></script>
+  <script src="./firebase-workspace-adapter.js"></script>
+  <script src="./firebase-dashboard-adapter.js"></script>
+  <script src="./firebase-dashboard-view.js"></script>
+  <script src="./firebase-emulator.js"></script>
+  <script src="./team.js"></script>
+  <script src="./app.js"></script>
+  <script src="./auth.js"></script>
+</body>
+</html>
