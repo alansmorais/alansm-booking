@@ -404,3 +404,76 @@ test("createAppointment enforces idempotency and prevents overlapping concurrent
   assert.ok(["ALREADY_EXISTS", "ABORTED"].includes(failures[0].data.error?.status),
     JSON.stringify(failures[0].data));
 });
+
+
+test("cancelAppointment cancels once, records audit and treats replay as idempotent", async () => {
+  const appointmentId = `cancel-test-${Date.now()}`;
+  const ref = adminDb.doc(`tenants/${tenantId}/appointments/${appointmentId}`);
+  await ref.set({
+    tenantId, professionalId: "cancel-test-professional",
+    serviceId: "cancel-test-service", clientId: "cancel-test-client",
+    startAt: new Date(Date.now() + 3 * 86400000),
+    endAt: new Date(Date.now() + 3 * 86400000 + 3600000),
+    status: "confirmed"
+  });
+
+  const cancelled = await callable("cancelAppointment", {
+    tenantId, appointmentId, reason: "Solicitação do cliente"
+  });
+  assert.equal(cancelled.data.result?.ok, true, JSON.stringify(cancelled.data));
+  assert.equal(cancelled.data.result.status, "cancelled");
+  assert.equal(cancelled.data.result.alreadyCancelled, false);
+
+  const stored = await ref.get();
+  assert.equal(stored.data()?.status, "cancelled");
+  assert.equal(stored.data()?.cancellationReason, "Solicitação do cliente");
+  assert.equal(stored.data()?.cancelledBy, (await adminAuth.getUserByEmail(email)).uid);
+
+  const replay = await callable("cancelAppointment", { tenantId, appointmentId });
+  assert.equal(replay.data.result?.ok, true, JSON.stringify(replay.data));
+  assert.equal(replay.data.result.alreadyCancelled, true);
+
+  const audit = await adminDb.collection(`tenants/${tenantId}/auditLog`)
+    .where("resourceId", "==", appointmentId)
+    .where("action", "==", "appointment.cancelled").get();
+  assert.equal(audit.size, 1);
+});
+
+test("cancelAppointment rejects staff and does not modify another tenant appointment", async () => {
+  const otherTenant = await callable("createTenant", {
+    name: "Outra empresa de teste",
+    slug: `other-${Date.now()}`,
+    timezone: "Europe/Warsaw", currency: "PLN"
+  });
+  assert.equal(otherTenant.data.result?.ok, true, JSON.stringify(otherTenant.data));
+  const otherTenantId = otherTenant.data.result.tenant.tenantId;
+  const appointmentId = `isolated-${Date.now()}`;
+  const otherRef = adminDb.doc(`tenants/${otherTenantId}/appointments/${appointmentId}`);
+  await otherRef.set({
+    tenantId: otherTenantId, status: "confirmed",
+    startAt: new Date(Date.now() + 4 * 86400000),
+    endAt: new Date(Date.now() + 4 * 86400000 + 3600000)
+  });
+
+  const denied = await callable("cancelAppointment", { tenantId: otherTenantId, appointmentId });
+  assert.equal(denied.data.error?.status, "PERMISSION_DENIED", JSON.stringify(denied.data));
+  assert.equal((await otherRef.get()).data()?.status, "confirmed");
+
+  const staffUid = `staff-cancel-${Date.now()}`;
+  await adminAuth.createUser({
+    uid: staffUid, email: `${staffUid}@example.test`,
+    password: "Test-password-123!", emailVerified: true
+  });
+  await adminDb.doc(`tenants/${tenantId}/members/${staffUid}`).set({
+    uid: staffUid, tenantId, role: "staff", status: "active"
+  });
+  const customToken = await adminAuth.createCustomToken(staffUid);
+  const signin = await jsonRequest(`${AUTH}/accounts:signInWithCustomToken?key=fake-api-key`, {
+    token: customToken, returnSecureToken: true
+  });
+  assert.equal(signin.status, 200, JSON.stringify(signin.data));
+  const staffDenied = await callable("cancelAppointment", {
+    tenantId: otherTenantId, appointmentId
+  }, signin.data.idToken);
+  assert.equal(staffDenied.data.error?.status, "PERMISSION_DENIED", JSON.stringify(staffDenied.data));
+});
