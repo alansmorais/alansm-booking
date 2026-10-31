@@ -140,7 +140,7 @@
         }, {
           label: "Terminar sessão",
           secondary: true,
-          action: async () => { await firebaseAuth.signOut(); showAuthForms(); setNotice("Sessão terminada", "Pode entrar novamente com uma conta de teste do emulador."); }
+          action: async () => { await firebaseAuth.signOut(); showAuthForms(); setNotice("Sessão terminada", "Pode entrar novamente com uma conta de teste do ambiente conectado."); }
         }]
       );
       return;
@@ -164,7 +164,7 @@
     const runtime = window.BookingFirebaseRuntime;
     if (!runtime) throw new Error("O runtime Firebase não foi carregado.");
     await runtime.ready;
-    if (runtime.mode !== "firebase-emulator" || !runtime.auth || !runtime.functions) {
+    if (!["firebase-emulator", "firebase-development"].includes(runtime.mode) || !runtime.auth || !runtime.functions) {
       throw new Error("O ambiente Firebase solicitado não está disponível ou não foi configurado.");
     }
     firebaseAuth = compatAuthAdapter(runtime.auth);
@@ -179,12 +179,12 @@
     const user = firebaseAuth.getCurrentUser();
     if (user) {
       if (user.emailVerified) await showVerifiedAccount();
-      else showFirebaseStatus("Confirmação de e-mail pendente", "A conta existe apenas no Auth Emulator. Confirme o e-mail no painel do emulador e depois volte para continuar.", [{
+      else showFirebaseStatus("Confirmação de e-mail pendente", runtime.mode === "firebase-development" ? "Confirme o e-mail usando a mensagem enviada pelo Firebase e depois volte para continuar." : "A conta existe apenas no Auth Emulator. Confirme o e-mail no painel do emulador e depois volte para continuar.", [{
         label: "Já confirmei o e-mail",
         action: async () => {
           try {
             const refreshed = await firebaseAuth.reloadCurrentUser();
-            if (!refreshed?.emailVerified) throw new Error("O emulador ainda indica que o e-mail não foi confirmado.");
+            if (!refreshed?.emailVerified) throw new Error("O Firebase ainda indica que o e-mail não foi confirmado.");
             await showVerifiedAccount();
           } catch (error) { notify(error.message); }
         }
