@@ -995,7 +995,8 @@ export const saveTenantClient = onCall(
     const notes = cleanText(input.notes, 500);
     const active = input.active !== false;
     if (!validDocumentId(tenantId) || (clientId && !validDocumentId(clientId)) || name.length < 2 ||
-        (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+        (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) ||
+        (input.active !== undefined && typeof input.active !== "boolean")) {
       throw new HttpsError("invalid-argument", "Dados do cliente inválidos.");
     }
     await requireTenantReader(auth.uid, tenantId);
