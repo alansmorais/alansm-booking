@@ -48,6 +48,7 @@
     if(workspaceName) workspaceName.textContent=tenant.name;
     if(workspaceRole) workspaceRole.textContent="Acesso: "+(tenant.role||"membro");
     const tenantTimeZone=tenant.timezone||"UTC";
+    let refreshBookingClientOptions=null;
     const startDate=dateInZone(new Date(),tenantTimeZone);
     const endDate=shiftDate(startDate,6);
     content.innerHTML='<section class="firebase-readonly"><div class="firebase-readonly-head"><div><span class="firebase-readonly-kicker">DADOS AUTENTICADOS</span><h1>'+escape(tenant.name)+'</h1><p>Consulta segura · gestão disponível para proprietários e administradores</p></div><button type="button" id="firebaseReadOnlySignOut" class="secondary-btn">Terminar sessão</button></div><div class="firebase-readonly-state" role="status">A carregar catálogo, horários e agenda da empresa…</div><div id="firebaseReadOnlyData"></div></section>';
@@ -87,6 +88,7 @@
             workspace.getCatalog({tenantId:tenant.tenantId})
           ]);
           fillOptions(bookingForm.elements.clientId,(clientResult.clients||[]).filter(item=>item.status==="active"),"Selecionar cliente");
+          refreshBookingClientOptions=clients=>fillOptions(bookingForm.elements.clientId,(clients||[]).filter(item=>item.status==="active"),"Selecionar cliente");
           fillOptions(bookingForm.elements.serviceId,(liveCatalog.services||[]).filter(item=>item.status==="active"),"Selecionar serviço");
           fillOptions(bookingForm.elements.professionalId,(liveCatalog.professionals||[]).filter(item=>item.status==="active"),"Selecionar profissional");
           bookingForm.elements.date.min=startDate;
@@ -342,6 +344,7 @@
           const result=await workspace.getClients({tenantId:tenant.tenantId});
           clientList.replaceChildren();
           const clients=result.clients||[];
+          if(refreshBookingClientOptions)refreshBookingClientOptions(clients);
           if(!clients.length){const empty=document.createElement("p");empty.className="firebase-readonly-empty";empty.textContent="Ainda não há clientes cadastrados.";clientList.append(empty);}
           clients.forEach(client=>{
             const row=document.createElement("div");row.className="firebase-client-row";
