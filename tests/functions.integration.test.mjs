@@ -431,9 +431,9 @@ test("createAppointment enforces idempotency and prevents overlapping concurrent
   });
   assert.equal(outsideHours.data.error?.status, "FAILED_PRECONDITION", JSON.stringify(outsideHours.data));
   const outsideHoursAppointments = await adminDb.collection(`${base}/appointments`)
-    .where("idempotencyKey", "==", "not-stored")
+    .where("startAt", "==", new Date(startAtMs + 6 * 60 * 60 * 1000))
     .get();
-  assert.equal(outsideHoursAppointments.size, 0);
+  assert.equal(outsideHoursAppointments.size, 0, "A reserva fora do horário não deve ser gravada.");
 });
 
 
