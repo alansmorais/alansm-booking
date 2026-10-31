@@ -902,6 +902,25 @@ export const getTenantSchedule = onCall(
       db.collection(`${base}/scheduleExceptions`).where("date", ">=", startDate).where("date", "<=", endDate).limit(500).get(),
       db.collection(`${base}/professionalExceptions`).where("date", ">=", startDate).where("date", "<=", endDate).limit(1000).get()
     ]);
+    const safeScheduleDays = (value: unknown): Record<string, unknown> => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+      const source = value as Record<string, unknown>;
+      const result: Record<string, unknown> = {};
+      for (let day = 0; day <= 6; day++) {
+        const periods = source[String(day)] ?? [];
+        if (!validatePeriods(periods)) {
+          result[String(day)] = [];
+          continue;
+        }
+        result[String(day)] = (periods as SchedulePeriod[]).map((period) => ({
+          start: period.start,
+          end: period.end,
+          breaks: (period.breaks as Array<{ start: string; end: string }> | undefined ?? [])
+            .map((item) => ({ start: item.start, end: item.end }))
+        }));
+      }
+      return result;
+    };
     const safeRecord = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
       const value = doc.data();
       return { id: doc.id, date: cleanText(value.date, 10), start: cleanText(value.start, 5),
@@ -911,11 +930,11 @@ export const getTenantSchedule = onCall(
     const professionalSchedules: Record<string, unknown> = {};
     professionals.docs.forEach((doc) => {
       if (doc.id.startsWith("professional_")) {
-        professionalSchedules[doc.id.slice("professional_".length)] = doc.data().days || {};
+        professionalSchedules[doc.id.slice("professional_".length)] = safeScheduleDays(doc.data().days);
       }
     });
     return { ok: true, timezone: cleanText(company.data()?.timezone, 80),
-      companySchedule: company.data()?.days || {}, professionalSchedules,
+      companySchedule: safeScheduleDays(company.data()?.days), professionalSchedules,
       blocks: blocks.docs.map(safeRecord), exceptions: exceptions.docs.map(safeRecord),
       professionalExceptions: professionalExceptions.docs.map(safeRecord),
       truncated: blocks.size === 500 || exceptions.size === 500 || professionalExceptions.size === 1000 };
