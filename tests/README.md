@@ -55,3 +55,19 @@ python -m http.server 3000 --directory public
 Open `http://localhost:3000/?backend=firebase-emulator`. The Emulator UI is at `http://127.0.0.1:4000/`. Create a test account through the app, mark its email as verified in the Auth Emulator UI, and use the app's **Já confirmei o e-mail** action. Tenant creation is performed through the `createTenant` callable Function; the app then reads the session through `getSession`.
 
 Do not use personal/customer data. This is a local integration test, not a production setup. The operational dashboard and persistent catalog/agenda mutations are still not connected.
+
+
+## Remote Firebase Development (tablet preview)
+
+The remote development path is opt-in and is restricted to the dedicated Cloudflare Pages preview host:
+`firebase-emulator-bootstrap.alansm-booking-preview.pages.dev`.
+
+- Open the preview with `?backend=firebase-development` to request remote Firebase Development.
+- Demo remains the default when no backend query is present.
+- The configuration endpoint returns Firebase web-app configuration only when Cloudflare Preview variables explicitly mark the environment as `development`.
+- Missing configuration fails closed with HTTP 503; other hostnames are rejected.
+- Required Cloudflare **Preview** variables: `FIREBASE_ENVIRONMENT=development`, `FIREBASE_PROJECT_ID`, `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, and `FIREBASE_APP_ID`. Optional: `FIREBASE_MESSAGING_SENDER_ID`.
+- Do not add these variables to Cloudflare Production. Do not use a production Firebase project ID.
+- Firebase Auth, Firestore rules/indexes and callable Functions still need to be configured/deployed to the dedicated development Firebase project before account tests can work. This repository does not deploy Firebase resources automatically.
+
+Tests: `npm run test:firebase-config`.
