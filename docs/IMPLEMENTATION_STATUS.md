@@ -220,3 +220,12 @@ Active development branch: `firebase-emulator-bootstrap` (Cloudflare Pages previ
 - Latest observed validation for commit `7552141`: GitHub Actions emulator/build/security checks passed and Cloudflare Pages preview deployment succeeded. Follow-up CI-trigger changes are committed after that validation and must be observed in their own run.
 - Current preview URL: https://firebase-emulator-bootstrap.alansm-booking-preview.pages.dev
 - This remains a local-data demo. Firebase project setup, live authentication, deployed Functions, App Check, invitation email delivery, public booking, payment processing and production launch remain incomplete and require separate approvals/credentials.
+
+## Client directory and authenticated booking form (2026-10-31 — feature/client-management)
+- Added tenant-scoped getTenantClients and saveTenantClient callable Functions. Client contact data is returned only after active tenant membership validation; writes are audited and support soft deactivation.
+- Added client create/edit/deactivate controls to the authenticated dashboard. The agenda read model resolves client names through the tenant-scoped client API.
+- Added createAppointment and cancelAppointment workspace adapter methods. The authenticated dashboard now offers a booking form that submits through the existing server-side schedule, exception, block, and conflict validation.
+- Appointment creation rejects inactive clients. Firestore direct browser access to client and appointment documents remains denied.
+- Added adapter tests and Firebase Auth/Functions emulator integration tests for client CRUD, validation, unauthenticated/cross-tenant denial, and appointment adapter calls.
+- The changes are isolated in feature/client-management and tracked by draft PR #1 against firebase-emulator-bootstrap. Do not merge until Preview CI and manual emulator verification pass.
+- No production Firebase project, live customer data, deployed Functions, email delivery or App Check enforcement has been enabled by this work.
