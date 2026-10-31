@@ -28,8 +28,9 @@
   };
   const money = (minor,currency) => Number.isSafeInteger(minor)&&currency
     ? new Intl.NumberFormat("pt-BR",{style:"currency",currency}).format(minor/100) : "—";
-  async function mount({tenant,user,dashboard,onSignOut}={}) {
+  async function mount({tenant,user,workspace,dashboard,onSignOut}={}) {
     if (!tenant || !dashboard) throw new Error("Empresa ou painel Firebase inválido.");
+    if (["owner","admin"].includes(tenant.role) && (!workspace?.getCatalogForManagement || !workspace?.saveCatalogItem)) throw new Error("A gestão do catálogo não está disponível neste workspace.");
     const content=document.getElementById("content");
     const shell=document.querySelector(".app-shell");
     if (!content || !shell) throw new Error("A área do painel não foi encontrada.");
@@ -48,7 +49,7 @@
     const tenantTimeZone=tenant.timezone||"UTC";
     const startDate=dateInZone(new Date(),tenantTimeZone);
     const endDate=shiftDate(startDate,6);
-    content.innerHTML='<section class="firebase-readonly"><div class="firebase-readonly-head"><div><span class="firebase-readonly-kicker">DADOS AUTENTICADOS</span><h1>'+escape(tenant.name)+'</h1><p>Consulta segura · sem edição ou gravação nesta versão</p></div><button type="button" id="firebaseReadOnlySignOut" class="secondary-btn">Terminar sessão</button></div><div class="firebase-readonly-state" role="status">A carregar catálogo, horários e agenda da empresa…</div><div id="firebaseReadOnlyData"></div></section>';
+    content.innerHTML='<section class="firebase-readonly"><div class="firebase-readonly-head"><div><span class="firebase-readonly-kicker">DADOS AUTENTICADOS</span><h1>'+escape(tenant.name)+'</h1><p>Consulta segura · gestão disponível para proprietários e administradores</p></div><button type="button" id="firebaseReadOnlySignOut" class="secondary-btn">Terminar sessão</button></div><div class="firebase-readonly-state" role="status">A carregar catálogo, horários e agenda da empresa…</div><div id="firebaseReadOnlyData"></div></section>';
     document.getElementById("firebaseReadOnlySignOut").addEventListener("click",onSignOut);
     const state=content.querySelector(".firebase-readonly-state");
     const data=content.querySelector("#firebaseReadOnlyData");
@@ -137,7 +138,7 @@
         });
         try{await reloadManaged();}catch(error){managerStatus.textContent="Não foi possível carregar a gestão: "+(error.message||"erro desconhecido");}
       }
-      state.textContent="Dados carregados do Firebase. Esta tela é somente leitura.";
+      state.textContent="Dados carregados do Firebase. Ações disponíveis conforme as permissões da sua conta.";
       state.dataset.kind="success";
     } catch(error) {
       state.textContent="Não foi possível carregar os dados: "+(error.message||"erro desconhecido")+". Atualize a página ou volte a entrar.";
