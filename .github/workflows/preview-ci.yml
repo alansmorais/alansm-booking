@@ -4,7 +4,7 @@ on:
   push:
     branches: [preview, firebase-emulator-bootstrap]
   pull_request:
-    branches: [preview]
+    branches: [preview, firebase-emulator-bootstrap]
   workflow_dispatch:
 
 permissions:
