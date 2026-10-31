@@ -237,6 +237,34 @@
         }
         return invoke("saveScheduleBlock", { tenantId: id, ...(blockId ? { blockId } : {}), date, start, end, ...(professionalId ? { professionalId } : {}), reason: String(reason).trim().slice(0, 240) });
       },
+      async createAppointment({ tenantId, professionalId, serviceId, clientId, startAtMs, idempotencyKey, notes = "" } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        for (const [value, label] of [[professionalId, "profissional"], [serviceId, "serviço"], [clientId, "cliente"]]) {
+          if (!String(value || "").trim() || String(value).length > 128 || String(value).includes("/")) {
+            throw new Error("Selecione um " + label + " válido.");
+          }
+        }
+        if (!Number.isSafeInteger(startAtMs) || startAtMs <= Date.now() || startAtMs % 300000 !== 0) {
+          throw new Error("Escolha um horário futuro em intervalos de cinco minutos.");
+        }
+        const key = String(idempotencyKey || "").trim();
+        if (key.length < 8 || key.length > 128) throw new Error("Chave de operação inválida.");
+        return invoke("createAppointment", {
+          tenantId: id, professionalId: String(professionalId), serviceId: String(serviceId),
+          clientId: String(clientId), startAtMs, idempotencyKey: key,
+          notes: String(notes || "").trim().slice(0, 500)
+        });
+      },
+      async cancelAppointment({ tenantId, appointmentId, reason = "" } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        const appointment = String(appointmentId || "").trim();
+        if (!appointment || appointment.length > 128 || appointment.includes("/")) {
+          throw new Error("Selecione uma reserva válida.");
+        }
+        return invoke("cancelAppointment", {
+          tenantId: id, appointmentId: appointment, reason: String(reason || "").trim().slice(0, 240)
+        });
+      },
       async getClients({ tenantId } = {}) {
         const id = await requireSelectedTenant(tenantId);
         return invoke("getTenantClients", { tenantId: id });
