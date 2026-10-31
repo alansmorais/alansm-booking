@@ -24,7 +24,8 @@ beforeEach(async () => {
     await setDoc(doc(db, "tenants", "tenant-a", "members", "inactive-a"), { uid: "inactive-a", tenantId: "tenant-a", role: "staff", status: "inactive" });
     await setDoc(doc(db, "tenants", "tenant-b"), { tenantId: "tenant-b", name: "Empresa B", status: "active" });
     await setDoc(doc(db, "tenants", "tenant-b", "members", "owner-b"), { uid: "owner-b", tenantId: "tenant-b", role: "owner", status: "active" });
-    await setDoc(doc(db, "tenants", "tenant-a", "appointments", "appointment-a"), { tenantId: "tenant-a", label: "private" });
+    await setDoc(doc(db, "tenants", "tenant-a", "appointments", "appointment-a"), { tenantId: "tenant-a", label: "private", clientId: "client-a", notes: "private notes" });
+    await setDoc(doc(db, "tenants", "tenant-a", "clients", "client-a"), { tenantId: "tenant-a", name: "Cliente privado", phone: "+5511999999999" });
     await setDoc(doc(db, "publicBookingPages", "published"), { published: true, publicName: "Página pública" });
     await setDoc(doc(db, "publicBookingPages", "draft"), { published: false, publicName: "Rascunho" });
   });
@@ -32,10 +33,11 @@ beforeEach(async () => {
 
 after(async () => { await env?.cleanup(); });
 
-test("active member reads own tenant and appointments", async () => {
+test("active member reads tenant metadata but private agenda and client records require server APIs", async () => {
   const db = env.authenticatedContext("owner-a").firestore();
   await assertSucceeds(getDoc(doc(db, "tenants", "tenant-a")));
-  await assertSucceeds(getDoc(doc(db, "tenants", "tenant-a", "appointments", "appointment-a")));
+  await assertFails(getDoc(doc(db, "tenants", "tenant-a", "appointments", "appointment-a")));
+  await assertFails(getDoc(doc(db, "tenants", "tenant-a", "clients", "client-a")));
 });
 
 test("member cannot read another tenant or another member's private membership", async () => {
