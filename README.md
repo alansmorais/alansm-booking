@@ -21,7 +21,8 @@ Do not introduce a second backend or migrate the primary architecture without an
 - Responsive static dashboard with overview, weekly calendar, appointments, professionals, services, clients, public booking page placeholder and settings.
 - Demo availability engine intersects configurable company opening hours, each professional's individual weekly schedule, breaks, date exceptions, blocked time, service duration and appointment overlap checks.
 - Demo data is fictitious and held locally in the browser; it is not synchronized to Firebase.
-- Firebase Auth and workspace adapter modules and callable Functions exist, but the primary frontend startup path still uses demo adapters.
+- On the isolated `firebase-emulator-bootstrap` branch, Auth Emulator login/registration, email verification and tenant onboarding are wired through Firebase Auth/Functions compat adapters. The successful Firebase session is shown separately; it does not expose demo dashboard data as real data.
+- The operational dashboard, catalog/agenda reads and persistent mutations are not yet integrated. The default app remains demo mode.
 - The public booking journey is not published or connected.
 - Server-side booking validation and Firestore security rules have automated emulator tests. This does not mean the user-facing SaaS is connected or ready for real bookings.
 
@@ -35,10 +36,10 @@ Do not introduce a second backend or migrate the primary architecture without an
 - Develop only in `preview`; keep `main` stable.
 
 ## Development sequence
-1. Keep demo mode intact and make the emulator path explicit and fail-closed.
-2. Connect Firebase SDK initialization to local Auth, Firestore and Functions emulators only.
-3. Wire registration, login, email verification and session restoration.
-4. Wire tenant creation and workspace selection.
+1. Keep demo mode intact and make the emulator path explicit and fail-closed. **Complete on the isolated emulator branch.**
+2. Connect Firebase SDK initialization to local Auth, Firestore and Functions emulators only. **Complete on the isolated emulator branch.**
+3. Wire registration, login, email verification and session restoration. **Implemented; requires local end-to-end confirmation.**
+4. Wire tenant creation and workspace selection. **Tenant creation/session read implemented; workspace UI selection remains.**
 5. Connect catalog and agenda reads.
 6. Implement schedule, team, client and appointment operations one domain at a time, with server-side validation and emulator integration tests.
 7. Keep public booking disabled until its customer-facing flow and abuse protections are implemented and tested.
