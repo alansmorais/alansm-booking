@@ -423,7 +423,7 @@ export const createAppointment = onCall(
       }
       if (!serviceSnap.exists || serviceSnap.data()?.status !== "active" ||
           !professionalSnap.exists || professionalSnap.data()?.status !== "active" ||
-          !clientSnap.exists) {
+          !clientSnap.exists || clientSnap.data()?.status === "inactive") {
         throw new HttpsError("failed-precondition", "Profissional, serviço ou cliente indisponível.");
       }
 
@@ -962,6 +962,61 @@ async function requireTenantReader(uid: string, tenantId: string) {
   return { tenant: tenant.data()!, role };
 }
 
+type TenantClientInput = { tenantId?: unknown; clientId?: unknown; name?: unknown; email?: unknown; phone?: unknown; notes?: unknown; active?: unknown };
+
+/** Bounded, tenant-scoped client directory for authenticated workspace members. */
+export const getTenantClients = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 20 },
+  async (request) => {
+    const auth = requireUser(request);
+    const tenantId = cleanText((request.data || {}).tenantId, 128);
+    await requireTenantReader(auth.uid, tenantId);
+    const snapshot = await db.collection("tenants/" + tenantId + "/clients").orderBy("updatedAt", "desc").limit(200).get();
+    return { ok: true, clients: snapshot.docs.map((doc) => {
+      const value = doc.data();
+      return { id: doc.id, name: cleanText(value.name, 100), email: cleanText(value.email, 254),
+        phone: cleanText(value.phone, 40), notes: cleanText(value.notes, 500),
+        status: value.status === "active" ? "active" : "inactive" };
+    }), truncated: snapshot.size === 200 };
+  }
+);
+
+/** Create or update a client without allowing cross-tenant document access. */
+export const saveTenantClient = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 10 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as TenantClientInput;
+    const tenantId = cleanText(input.tenantId, 128);
+    const clientId = cleanText(input.clientId, 128);
+    const name = cleanText(input.name, 100);
+    const email = cleanText(input.email, 254).toLowerCase();
+    const phone = cleanText(input.phone, 40);
+    const notes = cleanText(input.notes, 500);
+    const active = input.active !== false;
+    if (!validDocumentId(tenantId) || (clientId && !validDocumentId(clientId)) || name.length < 2 ||
+        (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) ||
+        (input.active !== undefined && typeof input.active !== "boolean")) {
+      throw new HttpsError("invalid-argument", "Dados do cliente inválidos.");
+    }
+    await requireTenantReader(auth.uid, tenantId);
+    const collection = db.collection("tenants/" + tenantId + "/clients");
+    const ref = clientId ? collection.doc(clientId) : collection.doc();
+    const audit = db.collection("tenants/" + tenantId + "/auditLog").doc();
+    const now = FieldValue.serverTimestamp();
+    await db.runTransaction(async (tx) => {
+      const existing = await tx.get(ref);
+      if (clientId && !existing.exists) throw new HttpsError("not-found", "Cliente não encontrado.");
+      const previous = existing.data() || {};
+      tx.set(ref, { tenantId, name, email, phone, notes, status: active ? "active" : "inactive",
+        createdAt: previous.createdAt || now, createdBy: previous.createdBy || auth.uid,
+        updatedAt: now, updatedBy: auth.uid });
+      tx.create(audit, { tenantId, actorUid: auth.uid, action: clientId ? "client.updated" : "client.created",
+        resourceType: "client", resourceId: ref.id, createdAt: now });
+    });
+    return { ok: true, clientId: ref.id, status: active ? "active" : "inactive" };
+  }
+);
 /**
  * Returns a deliberately small catalog for the authenticated tenant.
  * No client records, contact details, credentials or internal billing data are exposed.

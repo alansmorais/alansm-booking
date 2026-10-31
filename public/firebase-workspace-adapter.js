@@ -236,6 +236,54 @@
           throw new Error("Data ou horário do bloqueio inválido.");
         }
         return invoke("saveScheduleBlock", { tenantId: id, ...(blockId ? { blockId } : {}), date, start, end, ...(professionalId ? { professionalId } : {}), reason: String(reason).trim().slice(0, 240) });
+      },
+      async createAppointment({ tenantId, professionalId, serviceId, clientId, startAtMs, idempotencyKey, notes = "" } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        for (const [value, label] of [[professionalId, "profissional"], [serviceId, "serviço"], [clientId, "cliente"]]) {
+          if (!String(value || "").trim() || String(value).length > 128 || String(value).includes("/")) {
+            throw new Error("Selecione um " + label + " válido.");
+          }
+        }
+        if (!Number.isSafeInteger(startAtMs) || startAtMs <= Date.now() || startAtMs % 300000 !== 0) {
+          throw new Error("Escolha um horário futuro em intervalos de cinco minutos.");
+        }
+        const key = String(idempotencyKey || "").trim();
+        if (key.length < 8 || key.length > 128) throw new Error("Chave de operação inválida.");
+        return invoke("createAppointment", {
+          tenantId: id, professionalId: String(professionalId), serviceId: String(serviceId),
+          clientId: String(clientId), startAtMs, idempotencyKey: key,
+          notes: String(notes || "").trim().slice(0, 500)
+        });
+      },
+      async cancelAppointment({ tenantId, appointmentId, reason = "" } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        const appointment = String(appointmentId || "").trim();
+        if (!appointment || appointment.length > 128 || appointment.includes("/")) {
+          throw new Error("Selecione uma reserva válida.");
+        }
+        return invoke("cancelAppointment", {
+          tenantId: id, appointmentId: appointment, reason: String(reason || "").trim().slice(0, 240)
+        });
+      },
+      async getClients({ tenantId } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        return invoke("getTenantClients", { tenantId: id });
+      },
+      async saveClient({ tenantId, clientId = "", name, email = "", phone = "", notes = "", active = true } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        const normalizedName = String(name || "").trim();
+        const normalizedEmail = String(email || "").trim().toLowerCase();
+        const normalizedPhone = String(phone || "").trim();
+        const normalizedNotes = String(notes || "").trim();
+        if (normalizedName.length < 2 || normalizedName.length > 100) throw new Error("Informe um nome entre 2 e 100 caracteres.");
+        if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) throw new Error("Informe um e-mail válido.");
+        if (normalizedPhone.length > 40 || normalizedNotes.length > 500) throw new Error("Contacto ou observações demasiado longos.");
+        if (typeof active !== "boolean") throw new Error("Estado do cliente inválido.");
+        return invoke("saveTenantClient", {
+          tenantId: id, ...(clientId ? { clientId: String(clientId).trim() } : {}),
+          name: normalizedName, email: normalizedEmail, phone: normalizedPhone,
+          notes: normalizedNotes, active
+        });
       }
     });
   }

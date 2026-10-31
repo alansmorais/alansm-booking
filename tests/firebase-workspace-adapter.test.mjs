@@ -316,3 +316,112 @@ test("Firebase workspace rejects invalid schedule mutations before calling Funct
   await assert.rejects(adapter.saveScheduleBlock({ date: "2026-11-05", start: "12:00", end: "11:00" }), /bloqueio inválido/);
   assert.equal(writes, 0);
 });
+
+
+test("Firebase workspace lists and saves clients within the selected tenant", async () => {
+  const calls = [];
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async payload => {
+        calls.push({ name, payload });
+        if (name === "getSession") return { data: { tenants: [{ tenantId: "tenant-clients", name: "Empresa" }] } };
+        if (name === "getTenantClients") return { data: { ok: true, clients: [{ id: "client-1", name: "Maria" }] } };
+        return { data: { ok: true, clientId: payload.clientId || "client-new" } };
+      };
+    }
+  });
+  const clients = await adapter.getClients();
+  assert.equal(clients.clients[0].name, "Maria");
+  const created = await adapter.saveClient({
+    name: "  João Silva ", email: " JOAO@EXEMPLO.COM ",
+    phone: "+48 123 456 789", notes: " Cliente recorrente "
+  });
+  assert.equal(created.clientId, "client-new");
+  const updated = await adapter.saveClient({
+    clientId: "client-1", name: "Maria Silva", email: "maria@example.com",
+    phone: "123", notes: "", active: false
+  });
+  assert.equal(updated.clientId, "client-1");
+  const mutations = calls.filter(call => call.name !== "getSession");
+  assert.deepEqual(mutations.map(call => call.name), [
+    "getTenantClients", "saveTenantClient", "saveTenantClient"
+  ]);
+  assert.ok(mutations.every(call => call.payload.tenantId === "tenant-clients"));
+  assert.equal(mutations[1].payload.name, "João Silva");
+  assert.equal(mutations[1].payload.email, "joao@exemplo.com");
+  assert.equal(mutations[2].payload.active, false);
+});
+
+test("Firebase workspace rejects invalid client data before calling Functions", async () => {
+  let mutations = 0;
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async () => {
+        if (name === "getSession") return { data: { tenants: [{ tenantId: "tenant-clients", name: "Empresa" }] } };
+        mutations += 1;
+        return { data: {} };
+      };
+    }
+  });
+  await assert.rejects(adapter.saveClient({ name: "A" }), /2 e 100/);
+  await assert.rejects(adapter.saveClient({ name: "Maria", email: "email-invalido" }), /e-mail válido/);
+  await assert.rejects(adapter.saveClient({ name: "Maria", phone: "x".repeat(41) }), /demasiado longos/);
+  assert.equal(mutations, 0);
+});
+
+
+test("Firebase workspace creates and cancels appointments through tenant-scoped callables", async () => {
+  const calls = [];
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async payload => {
+        calls.push({ name, payload });
+        if (name === "getSession") return { data: { tenants: [{ tenantId: "tenant-booking", name: "Empresa" }] } };
+        return { data: { ok: true, appointmentId: payload.appointmentId || "appointment-1" } };
+      };
+    }
+  });
+  const startAtMs = Math.ceil((Date.now() + 86400000) / 300000) * 300000;
+  const created = await adapter.createAppointment({
+    professionalId: "professional-1", serviceId: "service-1", clientId: "client-1",
+    startAtMs, idempotencyKey: "booking-key-123", notes: "  Primeira visita "
+  });
+  assert.equal(created.appointmentId, "appointment-1");
+  const cancelled = await adapter.cancelAppointment({ appointmentId: "appointment-1", reason: "Pedido do cliente" });
+  assert.equal(cancelled.appointmentId, "appointment-1");
+  const mutations = calls.filter(call => call.name !== "getSession");
+  assert.deepEqual(mutations.map(call => call.name), ["createAppointment", "cancelAppointment"]);
+  assert.ok(mutations.every(call => call.payload.tenantId === "tenant-booking"));
+  assert.equal(mutations[0].payload.notes, "Primeira visita");
+  assert.equal(mutations[1].payload.reason, "Pedido do cliente");
+});
+
+test("Firebase workspace rejects invalid appointment input before invoking Functions", async () => {
+  let mutations = 0;
+  const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+    functions: {},
+    authAdapter: { mode: "firebase", getCurrentUser: () => ({ emailVerified: true }) },
+    httpsCallable(_functions, name) {
+      return async () => {
+        if (name === "getSession") return { data: { tenants: [{ tenantId: "tenant-booking", name: "Empresa" }] } };
+        mutations += 1;
+        return { data: {} };
+      };
+    }
+  });
+  await assert.rejects(adapter.createAppointment({
+    professionalId: "professional-1", serviceId: "service-1", clientId: "client-1",
+    startAtMs: Date.now() + 60000, idempotencyKey: "booking-key-123"
+  }), /intervalos de cinco minutos/);
+  await assert.rejects(adapter.createAppointment({
+    professionalId: "professional-1", serviceId: "service-1", clientId: "client-1",
+    startAtMs: Math.ceil((Date.now() + 86400000) / 300000) * 300000, idempotencyKey: "short"
+  }), /Chave de operação inválida/);
+  assert.equal(mutations, 0);
+});

@@ -48,6 +48,7 @@
     if(workspaceName) workspaceName.textContent=tenant.name;
     if(workspaceRole) workspaceRole.textContent="Acesso: "+(tenant.role||"membro");
     const tenantTimeZone=tenant.timezone||"UTC";
+    let refreshBookingClientOptions=null;
     const startDate=dateInZone(new Date(),tenantTimeZone);
     const endDate=shiftDate(startDate,6);
     content.innerHTML='<section class="firebase-readonly"><div class="firebase-readonly-head"><div><span class="firebase-readonly-kicker">DADOS AUTENTICADOS</span><h1>'+escape(tenant.name)+'</h1><p>Consulta segura · gestão disponível para proprietários e administradores</p></div><button type="button" id="firebaseReadOnlySignOut" class="secondary-btn">Terminar sessão</button></div><div class="firebase-readonly-state" role="status">A carregar catálogo, horários e agenda da empresa…</div><div id="firebaseReadOnlyData"></div></section>';
@@ -67,11 +68,110 @@
       data.innerHTML=
         '<div class="firebase-readonly-stats"><article><strong>'+appts.length+'</strong><span>Agendamentos no período</span></article><article><strong>'+professionals.length+'</strong><span>Profissionais</span></article><article><strong>'+services.length+'</strong><span>Serviços</span></article><article><strong>'+blocks.length+'</strong><span>Bloqueios</span></article></div>'+
         '<section class="firebase-readonly-section"><h2>Agenda · '+escape(startDate)+' a '+escape(endDate)+'</h2>'+
-        (appts.length?'<div class="firebase-readonly-table-wrap"><table><thead><tr><th>Data</th><th>Hora</th><th>Serviço</th><th>Profissional</th><th>Estado</th><th>Valor</th></tr></thead><tbody>'+appts.map(a=>'<tr><td>'+escape(a.date)+'</td><td>'+escape(a.time)+'</td><td>'+escape(a.service)+'</td><td>'+escape(a.professional)+'</td><td>'+escape(a.status)+'</td><td>'+escape(money(a.priceMinor,a.currency))+'</td></tr>').join("")+'</tbody></table></div>':'<p class="firebase-readonly-empty">Não há agendamentos neste período.</p>')+'</section>'+
+        (appts.length?'<div class="firebase-readonly-table-wrap"><table><thead><tr><th>Data</th><th>Hora</th><th>Cliente</th><th>Serviço</th><th>Profissional</th><th>Estado</th><th>Valor</th>'+(["owner","admin"].includes(tenant.role)&&typeof workspace?.cancelAppointment==="function"?"<th>Ações</th>":"")+'</tr></thead><tbody>'+appts.map(a=>'<tr><td>'+escape(a.date)+'</td><td>'+escape(a.time)+'</td><td>'+escape(a.name)+'</td><td>'+escape(a.service)+'</td><td>'+escape(a.professional)+'</td><td>'+escape(a.status)+'</td><td>'+escape(money(a.priceMinor,a.currency))+'</td>'+(["owner","admin"].includes(tenant.role)&&typeof workspace?.cancelAppointment==="function"&&["pending","booked","confirmed"].includes(a.status)?'<td><button type="button" class="secondary-btn" data-cancel-appointment="'+escape(a.id)+'">Cancelar</button></td>':(["owner","admin"].includes(tenant.role)&&typeof workspace?.cancelAppointment==="function"?'<td>—</td>':""))+'</tr>').join("")+'</tbody></table></div>':'<p class="firebase-readonly-empty">Não há agendamentos neste período.</p>')+'</section>'+
         '<div class="firebase-readonly-columns"><section class="firebase-readonly-section"><h2>Profissionais</h2>'+(professionals.length?'<ul>'+professionals.map(p=>'<li>'+escape(p[0])+' <span>'+escape(p[3])+'</span></li>').join("")+'</ul>':'<p class="firebase-readonly-empty">Nenhum profissional cadastrado.</p>')+'</section>'+
         '<section class="firebase-readonly-section"><h2>Serviços</h2>'+(services.length?'<ul>'+services.map(s=>'<li>'+escape(s[0])+' <span>'+escape(s[1]+' min')+' · '+escape(s[2])+'</span></li>').join("")+'</ul>':'<p class="firebase-readonly-empty">Nenhum serviço cadastrado.</p>')+'</section></div>'+
         '<section class="firebase-readonly-section"><h2>Horários e disponibilidade</h2><p>Fuso horário: '+escape(schedule.timezone||"não informado")+'.'+(schedule.truncated?' Alguns registos foram limitados pela consulta.':'')+'</p><p>Os horários e bloqueios foram carregados do workspace autorizado.</p></section>';
 
+
+      if (["owner","admin"].includes(tenant.role) && typeof workspace?.cancelAppointment === "function") {
+        data.addEventListener("click", async event => {
+          const button = event.target.closest("[data-cancel-appointment]");
+          if (!button || button.disabled) return;
+          const appointmentId = button.dataset.cancelAppointment;
+          if (!window.confirm("Confirma o cancelamento desta reserva?")) return;
+          const reason = window.prompt("Motivo do cancelamento (opcional):", "") || "";
+          button.disabled = true;
+          state.textContent = "A cancelar reserva…";
+          state.dataset.kind = "";
+          try {
+            await workspace.cancelAppointment({ tenantId: tenant.tenantId, appointmentId, reason });
+            const refreshed = await dashboard.loadAgenda({ tenantId: tenant.tenantId, startAtMs, endAtMs });
+            const tbody = data.querySelector(".firebase-readonly table tbody");
+            if (tbody) {
+              tbody.replaceChildren();
+              (refreshed.appointments || []).forEach(a => {
+                const tr = document.createElement("tr");
+                [a.date,a.time,a.name,a.service,a.professional,a.status,money(a.priceMinor,a.currency)].forEach(value => {
+                  const td = document.createElement("td"); td.textContent = value; tr.append(td);
+                });
+                const action = document.createElement("td");
+                if (["pending","booked","confirmed"].includes(a.status)) {
+                  const cancel = document.createElement("button");
+                  cancel.type = "button"; cancel.className = "secondary-btn";
+                  cancel.dataset.cancelAppointment = a.id; cancel.textContent = "Cancelar";
+                  action.append(cancel);
+                } else action.textContent = "—";
+                tr.append(action); tbody.append(tr);
+              });
+            }
+            state.textContent = "Reserva cancelada. A agenda foi atualizada.";
+            state.dataset.kind = "success";
+          } catch (error) {
+            state.textContent = "Não foi possível cancelar: " + (error.message || "erro desconhecido");
+            state.dataset.kind = "error";
+            button.disabled = false;
+          }
+        });
+      }
+
+      if (typeof workspace?.createAppointment === "function" && typeof workspace?.getClients === "function") {
+        const bookingPanel=document.createElement("section");
+        bookingPanel.className="firebase-readonly-section firebase-appointment-form";
+        bookingPanel.innerHTML='<h2>Novo agendamento</h2><p>O servidor confirma a disponibilidade, os horários de funcionamento e os conflitos antes de guardar a reserva.</p><div class="firebase-appointment-status" role="status">A preparar formulário…</div><form><label>Cliente<select name="clientId" required><option value="">Selecionar cliente</option></select></label><label>Serviço<select name="serviceId" required><option value="">Selecionar serviço</option></select></label><label>Profissional<select name="professionalId" required><option value="">Selecionar profissional</option></select></label><label>Data<input name="date" type="date" required></label><label>Hora<input name="time" type="time" step="300" required value="09:00"></label><label>Observações<textarea name="notes" rows="2" maxlength="500"></textarea></label><div class="firebase-appointment-actions"><button type="submit" class="primary-btn">Confirmar agendamento</button></div></form>';
+        data.insertBefore(bookingPanel,data.firstChild);
+        const bookingStatus=bookingPanel.querySelector(".firebase-appointment-status");
+        const bookingForm=bookingPanel.querySelector("form");
+        const fillOptions=(select,items,placeholder)=>{select.replaceChildren();const first=document.createElement("option");first.value="";first.textContent=placeholder;select.append(first);items.forEach(item=>{const option=document.createElement("option");option.value=item.id;option.textContent=item.name;select.append(option);});};
+        try{
+          const [clientResult,liveCatalog]=await Promise.all([
+            workspace.getClients({tenantId:tenant.tenantId}),
+            workspace.getCatalog({tenantId:tenant.tenantId})
+          ]);
+          fillOptions(bookingForm.elements.clientId,(clientResult.clients||[]).filter(item=>item.status==="active"),"Selecionar cliente");
+          refreshBookingClientOptions=clients=>fillOptions(bookingForm.elements.clientId,(clients||[]).filter(item=>item.status==="active"),"Selecionar cliente");
+          fillOptions(bookingForm.elements.serviceId,(liveCatalog.services||[]).filter(item=>item.status==="active"),"Selecionar serviço");
+          fillOptions(bookingForm.elements.professionalId,(liveCatalog.professionals||[]).filter(item=>item.status==="active"),"Selecionar profissional");
+          bookingForm.elements.date.min=startDate;
+          bookingForm.elements.date.value=startDate;
+          bookingStatus.textContent="Formulário pronto. Horários indisponíveis serão rejeitados pelo servidor.";
+        }catch(error){bookingStatus.textContent="Não foi possível preparar o formulário: "+(error.message||"erro desconhecido");}
+        bookingForm.addEventListener("submit",async event=>{
+          event.preventDefault();
+          const submit=bookingForm.querySelector('button[type="submit"]');submit.disabled=true;bookingStatus.textContent="A validar disponibilidade e a guardar…";
+          try{
+            const values=new FormData(bookingForm);
+            const date=String(values.get("date")||"");
+            const time=String(values.get("time")||"");
+            const [year,month,day]=date.split("-").map(Number);
+            const [hour,minute]=time.split(":").map(Number);
+            if(!date||!time||!Number.isInteger(hour)||!Number.isInteger(minute))throw new Error("Informe uma data e hora válidas.");
+            const target=Date.UTC(year,month-1,day,hour,minute);
+            let startAtMs=target;
+            for(let attempt=0;attempt<6;attempt++){
+              const parts=new Intl.DateTimeFormat("en-CA",{timeZone:tenantTimeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(startAtMs));
+              const get=type=>Number(parts.find(part=>part.type===type)?.value||0);
+              const represented=Date.UTC(get("year"),get("month")-1,get("day"),get("hour"),get("minute"));
+              const delta=target-represented;startAtMs+=delta;if(delta===0)break;
+            }
+            const check=new Intl.DateTimeFormat("en-CA",{timeZone:tenantTimeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(startAtMs));
+            const part=type=>check.find(item=>item.type===type)?.value||"";
+            if(part("year")!==String(year)||part("month")!==String(month).padStart(2,"0")||part("day")!==String(day).padStart(2,"0")||part("hour")!==String(hour).padStart(2,"0")||part("minute")!==String(minute).padStart(2,"0"))throw new Error("Este horário não existe no fuso horário da empresa devido à mudança de hora.");
+            const key=window.crypto?.randomUUID?window.crypto.randomUUID():("booking-"+Date.now()+"-"+Math.random().toString(36).slice(2,14));
+            await workspace.createAppointment({tenantId:tenant.tenantId,clientId:String(values.get("clientId")||""),serviceId:String(values.get("serviceId")||""),professionalId:String(values.get("professionalId")||""),startAtMs,idempotencyKey:key,notes:String(values.get("notes")||"")});
+            if(date>=startDate&&date<=endDate){
+              bookingStatus.textContent="Agendamento confirmado e guardado no Firebase.";
+              const refreshed=await dashboard.loadAgenda({tenantId:tenant.tenantId,startAtMs,endAtMs});
+              const tbody=data.querySelector(".firebase-readonly table tbody");
+              if(tbody){tbody.replaceChildren();refreshed.appointments.forEach(a=>{const tr=document.createElement("tr");[a.date,a.time,a.name,a.service,a.professional,a.status,money(a.priceMinor,a.currency)].forEach(value=>{const td=document.createElement("td");td.textContent=value;tr.append(td);});tbody.append(tr);});}
+            }else{
+              bookingStatus.textContent="Agendamento confirmado. A data foi guardada; está fora dos sete dias atualmente exibidos na agenda.";
+            }
+            bookingForm.elements.notes.value="";
+          }catch(error){bookingStatus.textContent="Não foi possível confirmar: "+(error.message||"erro desconhecido");}
+          finally{submit.disabled=false;}
+        });
+      }
       if (["owner","admin"].includes(tenant.role) && workspace?.getCatalogForManagement && workspace?.saveCatalogItem) {
         const panel=document.createElement("section");
         panel.className="firebase-readonly-section firebase-management";
@@ -270,6 +370,54 @@
         });
         try{await loadTeam();}catch(error){teamStatus.textContent="Não foi possível carregar a equipe: "+(error.message||"erro desconhecido");}
       }
+
+      if (typeof workspace?.getClients === "function" && typeof workspace?.saveClient === "function") {
+        const panel=document.createElement("section");
+        panel.className="firebase-readonly-section firebase-client-management";
+        panel.innerHTML='<h2>Clientes</h2><p>Contactos guardados de forma privada dentro desta empresa. Apenas membros autorizados podem consultar estes dados.</p><div class="firebase-client-status" role="status">A carregar clientes…</div><div class="firebase-client-list"></div><form class="firebase-client-form"><h3>Novo cliente</h3><input type="hidden" name="clientId"><label>Nome<input name="name" minlength="2" maxlength="100" required></label><label>E-mail<input name="email" type="email" maxlength="254"></label><label>Telefone<input name="phone" type="tel" maxlength="40"></label><label>Observações<textarea name="notes" maxlength="500" rows="2"></textarea></label><div class="firebase-client-actions"><button class="primary-btn" type="submit">Guardar cliente</button><button class="secondary-btn" type="button" data-client-reset>Limpar</button></div></form>';
+        data.append(panel);
+        const clientStatus=panel.querySelector(".firebase-client-status");
+        const clientList=panel.querySelector(".firebase-client-list");
+        const clientForm=panel.querySelector(".firebase-client-form");
+        const resetClient=()=>{clientForm.reset();clientForm.elements.clientId.value="";panel.querySelector("h3").textContent="Novo cliente";};
+        const loadClients=async()=>{
+          clientStatus.textContent="A carregar clientes…";
+          const result=await workspace.getClients({tenantId:tenant.tenantId});
+          clientList.replaceChildren();
+          const clients=result.clients||[];
+          if(refreshBookingClientOptions)refreshBookingClientOptions(clients);
+          if(!clients.length){const empty=document.createElement("p");empty.className="firebase-readonly-empty";empty.textContent="Ainda não há clientes cadastrados.";clientList.append(empty);}
+          clients.forEach(client=>{
+            const row=document.createElement("div");row.className="firebase-client-row";
+            const info=document.createElement("div");const name=document.createElement("strong");name.textContent=client.name;
+            const contact=document.createElement("span");contact.textContent=[client.email,client.phone].filter(Boolean).join(" · ")||"Sem contacto";
+            const note=document.createElement("small");note.textContent=client.notes||"";
+            info.append(name,contact,note);
+            const actions=document.createElement("div");actions.className="firebase-client-row-actions";
+            const edit=document.createElement("button");edit.type="button";edit.className="secondary-btn";edit.textContent="Editar";
+            edit.addEventListener("click",()=>{clientForm.elements.clientId.value=client.id;clientForm.elements.name.value=client.name||"";clientForm.elements.email.value=client.email||"";clientForm.elements.phone.value=client.phone||"";clientForm.elements.notes.value=client.notes||"";panel.querySelector("h3").textContent="Editar cliente";clientForm.scrollIntoView({behavior:"smooth",block:"center"});});
+            actions.append(edit);
+            if(client.status==="active"){
+              const deactivate=document.createElement("button");deactivate.type="button";deactivate.className="secondary-btn";deactivate.textContent="Desativar";
+              deactivate.addEventListener("click",async()=>{deactivate.disabled=true;try{await workspace.saveClient({tenantId:tenant.tenantId,clientId:client.id,name:client.name,email:client.email,phone:client.phone,notes:client.notes,active:false});await loadClients();clientStatus.textContent="Cliente desativado."; }catch(error){clientStatus.textContent="Não foi possível desativar: "+(error.message||"erro desconhecido");deactivate.disabled=false;}});
+              actions.append(deactivate);
+            }
+            row.append(info,actions);clientList.append(row);
+          });
+          clientStatus.textContent=(clients.length?"Clientes carregados: "+clients.length+". ":"Nenhum cliente cadastrado.")+(result.truncated?" A lista está limitada aos 200 registos mais recentes.":"");
+        };
+        clientForm.addEventListener("submit",async event=>{
+          event.preventDefault();const button=clientForm.querySelector('button[type="submit"]');button.disabled=true;clientStatus.textContent="A guardar cliente…";
+          const values=new FormData(clientForm);
+          try{
+            await workspace.saveClient({tenantId:tenant.tenantId,clientId:String(values.get("clientId")||""),name:String(values.get("name")||""),email:String(values.get("email")||""),phone:String(values.get("phone")||""),notes:String(values.get("notes")||""),active:true});
+            resetClient();await loadClients();clientStatus.textContent="Cliente guardado com sucesso.";
+          }catch(error){clientStatus.textContent="Não foi possível guardar: "+(error.message||"erro desconhecido");}
+          finally{button.disabled=false;}
+        });
+        panel.querySelector("[data-client-reset]").addEventListener("click",resetClient);
+        try{await loadClients();}catch(error){clientStatus.textContent="Não foi possível carregar clientes: "+(error.message||"erro desconhecido");}
+      }
       state.textContent="Dados carregados do Firebase. Ações disponíveis conforme as permissões da sua conta.";
       state.dataset.kind="success";
     } catch(error) {
@@ -283,6 +431,12 @@
 
   const managementStyle=document.createElement("style");
   managementStyle.textContent='.firebase-management [hidden]{display:none!important}.firebase-management>p{color:#64748b}.firebase-management-status{padding:10px 12px;background:#f1f5f9;border-radius:9px;margin:12px 0;color:#334155;font-size:13px}.firebase-management-list{display:grid;grid-template-columns:1fr 1fr;gap:16px}.firebase-management-group h3,.firebase-management-form h3{font-size:15px;margin:10px 0}.firebase-management-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #e5e7eb}.firebase-management-row strong,.firebase-management-row span,.firebase-management-row small{display:block}.firebase-management-row span,.firebase-management-row small{font-size:12px;color:#64748b;margin-top:3px}.firebase-management-row-actions,.firebase-management-actions{display:flex;gap:8px;flex-wrap:wrap}.firebase-management-form{border-top:1px solid #e5e7eb;margin-top:18px;padding-top:18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.firebase-management-form h3{grid-column:1/-1}.firebase-management-form label{display:grid;gap:6px;font-size:13px;color:#475569}.firebase-management-form input,.firebase-management-form select{min-width:0;width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.firebase-management-actions{grid-column:1/-1}.firebase-management button:disabled{opacity:.55;cursor:wait}@media(max-width:700px){.firebase-management-list{grid-template-columns:1fr}.firebase-management-form{grid-template-columns:1fr}.firebase-management-row{align-items:flex-start;flex-direction:column}}';
+  const appointmentStyle=document.createElement("style");
+  appointmentStyle.textContent='.firebase-appointment-form>p{color:#64748b}.firebase-appointment-form form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.firebase-appointment-form label{display:grid;gap:6px;font-size:13px;color:#475569}.firebase-appointment-form input,.firebase-appointment-form select,.firebase-appointment-form textarea{width:100%;min-width:0;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.firebase-appointment-form label:nth-of-type(6),.firebase-appointment-actions{grid-column:1/-1}.firebase-appointment-status{padding:10px 12px;background:#f1f5f9;border-radius:9px;margin:12px 0;color:#334155;font-size:13px}.firebase-appointment-form button:disabled{opacity:.55;cursor:wait}@media(max-width:700px){.firebase-appointment-form form{grid-template-columns:1fr}}';
+  document.head.append(appointmentStyle);
+  const clientStyle=document.createElement("style");
+  clientStyle.textContent='.firebase-client-management>p{color:#64748b}.firebase-client-list{display:grid;grid-template-columns:1fr 1fr;gap:10px}.firebase-client-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid #e5e7eb;border-radius:10px}.firebase-client-row strong,.firebase-client-row span,.firebase-client-row small{display:block}.firebase-client-row span,.firebase-client-row small{font-size:12px;color:#64748b;margin-top:4px;overflow-wrap:anywhere}.firebase-client-row-actions,.firebase-client-actions{display:flex;gap:8px;flex-wrap:wrap}.firebase-client-status{padding:10px 12px;background:#f1f5f9;border-radius:9px;margin:12px 0;color:#334155;font-size:13px}.firebase-client-form{border-top:1px solid #e5e7eb;margin-top:18px;padding-top:18px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.firebase-client-form h3,.firebase-client-form label:nth-of-type(4),.firebase-client-actions{grid-column:1/-1}.firebase-client-form label{display:grid;gap:6px;font-size:13px;color:#475569}.firebase-client-form input,.firebase-client-form textarea{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.firebase-client-management button:disabled{opacity:.55;cursor:wait}@media(max-width:700px){.firebase-client-list,.firebase-client-form{grid-template-columns:1fr}.firebase-client-row{align-items:flex-start;flex-direction:column}}';
+  document.head.append(clientStyle);
   const scheduleStyle=document.createElement("style");
   scheduleStyle.textContent='.schedule-days{grid-column:1/-1;display:grid;gap:8px}.schedule-day-row{display:grid;grid-template-columns:minmax(150px,1.4fr) 1fr 1fr;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #e5e7eb}.schedule-day-row label{display:flex;align-items:center;gap:8px;font-size:13px;color:#475569}.schedule-day-row input[type=time]{min-width:0;width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.schedule-day-enabled input{width:auto}.schedule-current{margin-top:18px}.schedule-current h3{font-size:15px}@media(max-width:700px){.schedule-day-row{grid-template-columns:1fr 1fr}.schedule-day-enabled{grid-column:1/-1}}';
   const teamStyle=document.createElement("style");

@@ -46,7 +46,7 @@ test("Firebase dashboard maps schedule records without losing tenant timezone or
 test("Firebase dashboard converts appointment timestamps in the tenant timezone and keeps client data private", async () => {
   const adapter = window.BookingFirebaseDashboard.createFirebaseDashboardAdapter({
     timeZone: "Europe/Warsaw",
-    workspace: { mode: "firebase", getCatalog: async () => ({ professionals: [{ id: "pro-1", name: "Ana", status: "active" }], services: [{ id: "svc-1", name: "Corte", status: "active" }] }), getAgenda: async () => ({
+    workspace: { mode: "firebase", getCatalog: async () => ({ professionals: [{ id: "pro-1", name: "Ana", status: "active" }], services: [{ id: "svc-1", name: "Corte", status: "active" }] }), getClients: async () => ({ clients: [{ id: "c1", name: "Maria" }] }), getAgenda: async () => ({
       appointments: [{
         id: "a1", clientId: "c1", professionalId: "pro-1", serviceId: "svc-1",
         startAtMs: Date.parse("2026-11-02T09:00:00Z"), endAtMs: Date.parse("2026-11-02T09:30:00Z"),
@@ -60,7 +60,7 @@ test("Firebase dashboard converts appointment timestamps in the tenant timezone 
   assert.equal(result.appointments[0].time, "10:00");
   assert.equal(result.appointments[0].duration, 30);
   assert.equal(result.appointments[0].status, "Confirmado");
-  assert.equal(result.appointments[0].name, "Cliente");
+  assert.equal(result.appointments[0].name, "Maria");
   assert.equal(result.appointments[0].clientId, "c1");
   assert.equal(result.appointments[0].professional, "Ana");
   assert.equal(result.appointments[0].service, "Corte");

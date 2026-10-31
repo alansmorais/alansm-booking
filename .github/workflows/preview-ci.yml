@@ -38,6 +38,9 @@ jobs:
           node --check public/invitation-page.js
           node --check public/firebase-auth-adapter.js
           node --check public/firebase-workspace-adapter.js
+          node --check public/firebase-dashboard-adapter.js
+          node --check public/firebase-dashboard-view.js
+          node --check tests/firebase-workspace-adapter.test.mjs
           node --check public/availability.js
           node --check public/data-adapter.js
           node --check public/team.js
