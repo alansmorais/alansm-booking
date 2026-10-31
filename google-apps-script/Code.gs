@@ -11,7 +11,7 @@
  */
 const COLLECTIONS = [
   "companies", "users", "services", "professionals", "schedules",
-  "clients", "appointments", "blocks", "exceptions", "subscriptions"
+  "clients", "appointments", "blocks", "exceptions", "professionalExceptions", "subscriptions"
 ];
 const HEADERS = ["id", "companyId", "payload", "updatedAt"];
 
@@ -59,35 +59,35 @@ function ensureSchema_(ss) {
 function saveSnapshot_(ss, body) {
   var companyId = safeId_(body.companyId);
   var data = body.data;
-  if (!data || typeof data !== "object") throw new Error("invalid_data");
+  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("invalid_data");
   var mapping = {
-    companies: data.company ? [data.company] : [],
-    users: data.users || [],
-    services: data.services || [],
-    professionals: data.professionals || [],
-    schedules: data.schedules || [],
-    clients: data.clients || [],
-    appointments: data.appointments || [],
-    blocks: data.blocks || [],
-    exceptions: data.exceptions || [],
-    subscriptions: data.subscriptions || []
+    companies: data.company === undefined ? undefined : [data.company],
+    users: data.users, services: data.services, professionals: data.professionals,
+    schedules: data.schedules, clients: data.clients, appointments: data.appointments,
+    blocks: data.blocks, exceptions: data.exceptions,
+    professionalExceptions: data.professionalExceptions,
+    subscriptions: data.subscriptions
   };
   COLLECTIONS.forEach(function (name) {
+    if (mapping[name] === undefined) return;
+    if (!Array.isArray(mapping[name])) throw new Error("invalid_collection_" + name);
     var sheet = ss.getSheetByName(name);
     var rows = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues() : [];
     var kept = rows.filter(function (r) { return String(r[1]) !== companyId; });
     var incoming = mapping[name].map(function (item, index) {
-      var id = safeId_(item && item.id || name + "-" + index);
-      return [id, companyId, JSON.stringify(item), new Date().toISOString()];
+      if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error("invalid_record_" + name);
+      var id = safeId_(item.id || name + "-" + index);
+      if (item.companyId && String(item.companyId) !== companyId) throw new Error("tenant_mismatch");
+      var record = Object.assign({}, item, { id: id, companyId: companyId });
+      return [id, companyId, JSON.stringify(record), new Date().toISOString()];
     });
-    sheet.clearContents();
-    sheet.getRange(1, 1, 1, 4).setValues([HEADERS]);
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, 4).clearContent();
     var combined = kept.concat(incoming);
     if (combined.length) sheet.getRange(2, 1, combined.length, 4).setValues(combined);
   });
   return { saved: true, companyId: companyId };
 }
-
 function getSnapshot_(ss, body) {
   var companyId = safeId_(body.companyId), output = {};
   COLLECTIONS.forEach(function (name) {
@@ -141,6 +141,8 @@ function createBooking_(ss, body) {
 }
 
 function isSlotAvailable_(booking, duration, schedule, data) {
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(booking.date || "")) ||
+      !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(booking.time || ""))) return false;
   var day = new Date(booking.date + "T12:00:00").getDay();
   var periods = (schedule.days && schedule.days[day]) || [];
   var start = timeMinutes_(booking.time), end = start + duration;
@@ -148,18 +150,26 @@ function isSlotAvailable_(booking, duration, schedule, data) {
     return start >= timeMinutes_(p.start) && end <= timeMinutes_(p.end) &&
       !(p.breaks || []).some(function (b) { return start < timeMinutes_(b.end) && timeMinutes_(b.start) < end; });
   })) return false;
-  if (data.exceptions.some(function (x) { return x.date === booking.date; })) return false;
-  if (data.blocks.some(function (x) {
+  var exceptions = (data.exceptions || []).concat(data.professionalExceptions || []);
+  if (exceptions.some(function (x) {
+    var dateMatches = x.date ? x.date === booking.date :
+      x.startDate && x.endDate && booking.date >= x.startDate && booking.date <= x.endDate;
+    var professionalMatches = !x.professionalId ||
+      String(x.professionalId) === String(booking.professionalId);
+    var professionalListMatches = !Array.isArray(x.professionalIds) ||
+      x.professionalIds.map(String).indexOf(String(booking.professionalId)) >= 0;
+    return dateMatches && professionalMatches && professionalListMatches && x.closed !== false;
+  })) return false;
+  if ((data.blocks || []).some(function (x) {
     return x.date === booking.date && (!x.professionalId || String(x.professionalId) === String(booking.professionalId)) &&
       start < timeMinutes_(x.end) && timeMinutes_(x.start) < end;
   })) return false;
-  return !data.appointments.some(function (x) {
+  return !(data.appointments || []).some(function (x) {
     return String(x.professionalId) === String(booking.professionalId) && x.date === booking.date &&
       x.status !== "Cancelado" && x.status !== "cancelled" &&
       start < timeMinutes_(x.time) + Number(x.duration) && timeMinutes_(x.time) < end;
   });
 }
-
 function appendRecord_(sheet, item, companyId) {
   sheet.appendRow([safeId_(item.id), companyId, JSON.stringify(item), new Date().toISOString()]);
 }
