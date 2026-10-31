@@ -31,3 +31,18 @@ test("demo mode remains separate and does not silently authenticate", () => {
   assert.match(html, /Continuar na demonstração local/);
   assert.match(auth, /cadastro e login reais estão desativados/);
 });
+
+test("dashboard switches to tenant-scoped Firebase data after authentication", async () => {
+  const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(app, /connectFirebaseWorkspace/);
+  assert.match(app, /firebaseWorkspaceAdapter\.getCatalog/);
+  assert.match(app, /firebaseWorkspaceAdapter\.getAgenda/);
+  assert.match(app, /firebaseMode\)\{renderFirebaseView\(\);return;/);
+  assert.match(app, /Nenhum dado fictício será exibido aqui/);
+  assert.match(app, /Dados carregados do Firebase Emulator/);
+});
+
+test("Firebase dashboard reads no more than the backend 31-day appointment window", async () => {
+  const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(app, /startAtMs:Date\.now\(\)-7\*86400000,endAtMs:Date\.now\(\)\+24\*86400000/);
+});
