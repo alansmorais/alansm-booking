@@ -20,7 +20,7 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check public/firebase-emulator.js
-          node --check functions/api/firebase-config.js
+          node --input-type=module --check < functions/api/firebase-config.js
           node --check public/auth.js
           node --check public/firebase-auth-adapter.js
           node --check public/firebase-workspace-adapter.js
