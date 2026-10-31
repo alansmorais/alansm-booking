@@ -46,3 +46,14 @@ test("Firebase dashboard reads no more than the backend 31-day appointment windo
   const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
   assert.match(app, /startAtMs:Date\.now\(\)-7\*86400000,endAtMs:Date\.now\(\)\+24\*86400000/);
 });
+
+test("Firebase catalog screens expose create edit and deactivate actions", async () => {
+  const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(app, /id="firebaseServiceForm"/);
+  assert.match(app, /id="firebaseProfessionalForm"/);
+  assert.match(app, /data-action="edit-catalog"/);
+  assert.match(app, /data-action="deactivate-catalog"/);
+  assert.match(app, /firebaseWorkspaceAdapter\.saveCatalogItem/);
+  assert.match(app, /itemId:String\(values\.get\("itemId"\)\|\|""\)/);
+  assert.match(app, /status:"inactive"/);
+});
