@@ -1,7 +1,7 @@
 # AlanSM Booking — implementation status
 
 ## Current branch
-Development work is on `preview`. Keep `main` stable and production untouched.
+Active development branch: `firebase-emulator-bootstrap` (Cloudflare Pages preview). Keep `main` and production untouched.
 
 ## Official architecture decision
 - Firebase Authentication for identity.
@@ -210,3 +210,13 @@ Development work is on `preview`. Keep `main` stable and production untouched.
 3. Add end-to-end emulator tests for booking idempotency/replay, concurrent overlapping booking attempts, cancellation transitions, schedule/exception/block authorization, invitation expiry/wrong-email/replay, owner protection and cross-tenant denial.
 4. Add explicit App Check enforcement and browser Firebase initialization only after a dedicated test Firebase project is approved and its configuration is supplied. Until then, keep all Firebase factories dormant.
 5. After approval, connect preview to the dedicated test project only, run manual tablet verification, and document rollback steps. Production remains out of scope and requires separate explicit approval.
+
+
+## Latest verified work — 2026-10-31
+- Active development branch: `firebase-emulator-bootstrap`; CI now runs on pushes and pull requests targeting both this branch and the legacy `preview` branch.
+- Schedule block edits preserve the original `createdAt` and `createdBy` metadata; updates are rejected if the referenced block does not exist.
+- Tenant schedule read responses now whitelist valid weekday periods and break fields, replacing malformed periods with empty arrays and excluding unexpected fields.
+- Emulator integration tests cover schedule block metadata preservation and safe schedule response shaping.
+- Latest observed validation for commit `7552141`: GitHub Actions emulator/build/security checks passed and Cloudflare Pages preview deployment succeeded. Follow-up CI-trigger changes are committed after that validation and must be observed in their own run.
+- Current preview URL: https://firebase-emulator-bootstrap.alansm-booking-preview.pages.dev
+- This remains a local-data demo. Firebase project setup, live authentication, deployed Functions, App Check, invitation email delivery, public booking, payment processing and production launch remain incomplete and require separate approvals/credentials.
