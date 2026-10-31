@@ -138,6 +138,69 @@
         });
         try{await reloadManaged();}catch(error){managerStatus.textContent="Não foi possível carregar a gestão: "+(error.message||"erro desconhecido");}
       }
+      if (["owner","admin"].includes(tenant.role) && workspace?.saveScheduleSettings && workspace?.saveScheduleException && workspace?.saveScheduleBlock) {
+        const schedulePanel=document.createElement("section");
+        schedulePanel.className="firebase-readonly-section firebase-management firebase-schedule-management";
+        schedulePanel.innerHTML='<h2>Gestão de horários e disponibilidade</h2><p>Configure o horário semanal, feriados, ausências e bloqueios. As alterações são registadas no Firebase.</p><div class="firebase-management-status" data-schedule-status role="status">Pronto para editar.</div><form class="firebase-management-form" data-week-form><h3>Horário semanal da empresa</h3><div class="schedule-days" data-days></div><div class="firebase-management-actions"><button class="primary-btn" type="submit">Guardar horário semanal</button></div></form><form class="firebase-management-form" data-exception-form><h3>Fecho ou ausência</h3><label>Tipo<select name="kind"><option value="companyClosure">Fecho da empresa</option><option value="professionalAbsence">Ausência de profissional</option></select></label><label>Profissional<select name="professionalId"><option value="">Selecione</option></select></label><label>Data inicial<input name="startDate" type="date" required></label><label>Data final<input name="endDate" type="date"></label><label>Motivo<input name="reason" maxlength="240" placeholder="Feriado, férias…"></label><div class="firebase-management-actions"><button class="primary-btn" type="submit">Guardar indisponibilidade</button></div></form><form class="firebase-management-form" data-block-form><h3>Bloquear horário</h3><label>Data<input name="date" type="date" required></label><label>Início<input name="start" type="time" required></label><label>Fim<input name="end" type="time" required></label><label>Profissional<select name="professionalId"><option value="">Toda a empresa</option></select></label><label>Motivo<input name="reason" maxlength="240" placeholder="Pausa, compromisso…"></label><div class="firebase-management-actions"><button class="primary-btn" type="submit">Criar bloqueio</button></div></form><div class="schedule-current"><h3>Bloqueios existentes</h3><div data-block-list></div></div>';
+        data.append(schedulePanel);
+        const scheduleStatus=schedulePanel.querySelector("[data-schedule-status]");
+        const weekForm=schedulePanel.querySelector("[data-week-form]");
+        const exceptionForm=schedulePanel.querySelector("[data-exception-form]");
+        const blockForm=schedulePanel.querySelector("[data-block-form]");
+        const daysHost=schedulePanel.querySelector("[data-days]");
+        const dayNames=["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"];
+        daysHost.innerHTML=dayNames.map((day,index)=>{
+          const periods=schedule.raw?.companySchedule?.[String(index)]||[];
+          const period=periods[0]||{};
+          return '<div class="schedule-day-row"><label class="schedule-day-enabled"><input type="checkbox" name="enabled_'+index+'" '+(periods.length?'checked':'')+'> '+day+'</label><label>Abre<input type="time" name="start_'+index+'" value="'+escape(period.start||"09:00")+'"></label><label>Fecha<input type="time" name="end_'+index+'" value="'+escape(period.end||"18:00")+'"></label></div>';
+        }).join("");
+        const fillProfessionalOptions=(select,includeCompany)=>{
+          select.innerHTML=(includeCompany?'<option value="">Toda a empresa</option>':'<option value="">Selecione</option>')+
+            managed.professionals.filter(item=>item.status==="active").map(item=>'<option value="'+escape(item.id)+'">'+escape(item.name)+'</option>').join("");
+        };
+        fillProfessionalOptions(exceptionForm.elements.professionalId,false);
+        fillProfessionalOptions(blockForm.elements.professionalId,true);
+        const toggleExceptionProfessional=()=>{exceptionForm.elements.professionalId.disabled=exceptionForm.elements.kind.value!=="professionalAbsence";};
+        exceptionForm.elements.kind.addEventListener("change",toggleExceptionProfessional);toggleExceptionProfessional();
+        const refreshSchedule=async message=>{
+          scheduleStatus.textContent=message||"A atualizar dados…";
+          await mount({tenant,user,workspace,dashboard,onSignOut});
+        };
+        weekForm.addEventListener("submit",async event=>{
+          event.preventDefault();const button=weekForm.querySelector('button[type="submit"]');button.disabled=true;scheduleStatus.textContent="A guardar horário…";
+          try{
+            const form=new FormData(weekForm);const days={};
+            for(let day=0;day<=6;day++){days[String(day)]=form.get("enabled_"+day)?[{start:String(form.get("start_"+day)),end:String(form.get("end_"+day)),breaks:[]}]:[];}
+            await workspace.saveScheduleSettings({tenantId:tenant.tenantId,scope:"company",days});
+            await refreshSchedule("Horário semanal guardado.");
+          }catch(error){scheduleStatus.textContent="Não foi possível guardar o horário: "+(error.message||"erro desconhecido");button.disabled=false;}
+        });
+        exceptionForm.addEventListener("submit",async event=>{
+          event.preventDefault();const button=exceptionForm.querySelector('button[type="submit"]');button.disabled=true;scheduleStatus.textContent="A guardar indisponibilidade…";
+          try{
+            const form=new FormData(exceptionForm);const kind=String(form.get("kind"));
+            await workspace.saveScheduleException({tenantId:tenant.tenantId,kind,professionalId:String(form.get("professionalId")||""),startDate:String(form.get("startDate")),endDate:String(form.get("endDate")||form.get("startDate")),reason:String(form.get("reason")||"")});
+            await refreshSchedule("Indisponibilidade guardada.");
+          }catch(error){scheduleStatus.textContent="Não foi possível guardar: "+(error.message||"erro desconhecido");button.disabled=false;}
+        });
+        blockForm.addEventListener("submit",async event=>{
+          event.preventDefault();const button=blockForm.querySelector('button[type="submit"]');button.disabled=true;scheduleStatus.textContent="A criar bloqueio…";
+          try{
+            const form=new FormData(blockForm);
+            await workspace.saveScheduleBlock({tenantId:tenant.tenantId,date:String(form.get("date")),start:String(form.get("start")),end:String(form.get("end")),professionalId:String(form.get("professionalId")||""),reason:String(form.get("reason")||"")});
+            await refreshSchedule("Bloqueio criado.");
+          }catch(error){scheduleStatus.textContent="Não foi possível criar o bloqueio: "+(error.message||"erro desconhecido");button.disabled=false;}
+        });
+        const blockList=schedulePanel.querySelector("[data-block-list]");
+        if(!blocks.length){blockList.textContent="Não existem bloqueios neste período.";}
+        blocks.forEach(block=>{
+          const row=document.createElement("div");row.className="firebase-management-row";
+          const info=document.createElement("span");info.textContent=block.date+" · "+block.start+"–"+block.end+" · "+(block.professionalId||"Toda a empresa")+(block.label?" · "+block.label:"");
+          const remove=document.createElement("button");remove.type="button";remove.className="secondary-btn";remove.textContent="Remover";
+          remove.addEventListener("click",async()=>{if(!window.confirm("Remover este bloqueio?"))return;remove.disabled=true;scheduleStatus.textContent="A remover bloqueio…";try{await workspace.saveScheduleBlock({tenantId:tenant.tenantId,blockId:block.id,date:block.date,remove:true});await refreshSchedule("Bloqueio removido.");}catch(error){scheduleStatus.textContent="Não foi possível remover: "+(error.message||"erro desconhecido");remove.disabled=false;}});
+          row.append(info,remove);blockList.append(row);
+        });
+      }
       state.textContent="Dados carregados do Firebase. Ações disponíveis conforme as permissões da sua conta.";
       state.dataset.kind="success";
     } catch(error) {
@@ -151,6 +214,8 @@
 
   const managementStyle=document.createElement("style");
   managementStyle.textContent='.firebase-management [hidden]{display:none!important}.firebase-management>p{color:#64748b}.firebase-management-status{padding:10px 12px;background:#f1f5f9;border-radius:9px;margin:12px 0;color:#334155;font-size:13px}.firebase-management-list{display:grid;grid-template-columns:1fr 1fr;gap:16px}.firebase-management-group h3,.firebase-management-form h3{font-size:15px;margin:10px 0}.firebase-management-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #e5e7eb}.firebase-management-row strong,.firebase-management-row span,.firebase-management-row small{display:block}.firebase-management-row span,.firebase-management-row small{font-size:12px;color:#64748b;margin-top:3px}.firebase-management-row-actions,.firebase-management-actions{display:flex;gap:8px;flex-wrap:wrap}.firebase-management-form{border-top:1px solid #e5e7eb;margin-top:18px;padding-top:18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.firebase-management-form h3{grid-column:1/-1}.firebase-management-form label{display:grid;gap:6px;font-size:13px;color:#475569}.firebase-management-form input,.firebase-management-form select{min-width:0;width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.firebase-management-actions{grid-column:1/-1}.firebase-management button:disabled{opacity:.55;cursor:wait}@media(max-width:700px){.firebase-management-list{grid-template-columns:1fr}.firebase-management-form{grid-template-columns:1fr}.firebase-management-row{align-items:flex-start;flex-direction:column}}';
+  const scheduleStyle=document.createElement("style");
+  scheduleStyle.textContent='.schedule-days{grid-column:1/-1;display:grid;gap:8px}.schedule-day-row{display:grid;grid-template-columns:minmax(150px,1.4fr) 1fr 1fr;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #e5e7eb}.schedule-day-row label{display:flex;align-items:center;gap:8px;font-size:13px;color:#475569}.schedule-day-row input[type=time]{min-width:0;width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.schedule-day-enabled input{width:auto}.schedule-current{margin-top:18px}.schedule-current h3{font-size:15px}@media(max-width:700px){.schedule-day-row{grid-template-columns:1fr 1fr}.schedule-day-enabled{grid-column:1/-1}}';
   document.head.append(managementStyle);
   document.head.append(style);
   window.BookingFirebaseDashboardView=Object.freeze({mount});
