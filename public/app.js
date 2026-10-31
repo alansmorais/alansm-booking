@@ -108,7 +108,7 @@ function renderFirebaseView(){
   try{
    const [catalog,agendaResult]=await Promise.all([
     firebaseCatalog?Promise.resolve(firebaseCatalog):firebaseWorkspaceAdapter.getCatalog({tenantId}),
-    firebaseWorkspaceAdapter.getAgenda({tenantId,startAtMs:Date.now()-7*86400000,endAtMs:Date.now()+31*86400000})
+    firebaseWorkspaceAdapter.getAgenda({tenantId,startAtMs:Date.now()-7*86400000,endAtMs:Date.now()+24*86400000})
    ]);
    if(version!==firebaseLoadVersion)return;
    firebaseCatalog=catalog;
@@ -176,6 +176,7 @@ window.BookingApp=Object.freeze({
  async connectFirebaseWorkspace(adapter,session){
   firebaseWorkspaceAdapter=adapter;firebaseWorkspaceSession=session;firebaseMode=true;
   workspaceSelect.innerHTML="";
+  const placeholder=document.createElement("option");placeholder.value="";placeholder.textContent="Selecione uma empresa";placeholder.disabled=true;placeholder.selected=true;workspaceSelect.appendChild(placeholder);
   (session.tenants||[]).forEach(tenant=>{
    const option=document.createElement("option");option.value=tenant.tenantId;option.textContent=tenant.name;
    workspaceSelect.appendChild(option);
