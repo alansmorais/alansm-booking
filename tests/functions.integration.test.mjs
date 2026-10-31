@@ -849,6 +849,11 @@ test("tenant client directory creates, lists, updates and validates private clie
   });
   assert.equal(invalid.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(invalid.data));
 
+  const invalidStatus = await callable("saveTenantClient", {
+    tenantId, name: "Cliente válido", active: "false"
+  });
+  assert.equal(invalidStatus.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(invalidStatus.data));
+
   const missing = await callable("saveTenantClient", {
     tenantId, clientId: "does-not-exist", name: "Cliente válido"
   });
