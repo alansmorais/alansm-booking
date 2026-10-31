@@ -3,6 +3,7 @@
 
   const PROJECT_ID = "demo-alansm-booking";
   const SDK_VERSION = "11.0.0";
+  const PREVIEW_HOST = "firebase-emulator-bootstrap.alansm-booking-preview.pages.dev";
   const EMULATORS = Object.freeze({
     auth: Object.freeze({ host: "127.0.0.1", port: 9099 }),
     firestore: Object.freeze({ host: "127.0.0.1", port: 8080 }),
@@ -14,19 +15,20 @@
   }
 
   function resolveMode({ search = "", hostname = "" } = {}) {
-    const params = new URLSearchParams(search);
-    const requested = params.get("backend");
-    if (requested !== "firebase-emulator") {
-      return Object.freeze({ mode: "demo", reason: "Firebase emulator mode was not explicitly requested." });
+    const requested = new URLSearchParams(search).get("backend");
+    if (requested === "firebase-emulator") {
+      if (!isLocalHost(hostname)) {
+        throw new Error("O modo Firebase Emulator só pode ser iniciado em localhost. A demonstração permanece isolada.");
+      }
+      return Object.freeze({ mode: "firebase-emulator", projectId: PROJECT_ID, emulators: EMULATORS });
     }
-    if (!isLocalHost(hostname)) {
-      throw new Error("O modo Firebase Emulator só pode ser iniciado em localhost. A demonstração permanece isolada.");
+    if (requested === "firebase-development") {
+      if (hostname !== PREVIEW_HOST) {
+        throw new Error("Firebase Development só pode ser iniciado no preview autorizado. A demonstração permanece isolada.");
+      }
+      return Object.freeze({ mode: "firebase-development", configUrl: "/api/firebase-config" });
     }
-    return Object.freeze({
-      mode: "firebase-emulator",
-      projectId: PROJECT_ID,
-      emulators: EMULATORS
-    });
+    return Object.freeze({ mode: "demo", reason: "Firebase was not explicitly requested." });
   }
 
   function firebaseOptions() {
@@ -44,9 +46,20 @@
       script.src = src;
       script.async = true;
       script.onload = resolve;
-      script.onerror = () => reject(new Error("Não foi possível carregar o SDK Firebase para os emuladores."));
+      script.onerror = () => reject(new Error("Não foi possível carregar o SDK Firebase."));
       document.head.appendChild(script);
     });
+  }
+
+  async function loadFirebaseSdk() {
+    const base = "https://www.gstatic.com/firebasejs/" + SDK_VERSION + "/";
+    await loadScript(base + "firebase-app-compat.js");
+    await loadScript(base + "firebase-auth-compat.js");
+    await loadScript(base + "firebase-firestore-compat.js");
+    await loadScript(base + "firebase-functions-compat.js");
+    if (!window.firebase || typeof window.firebase.initializeApp !== "function") {
+      throw new Error("SDK Firebase indisponível.");
+    }
   }
 
   async function initialize() {
@@ -55,35 +68,53 @@
       window.BookingFirebaseRuntime = Object.freeze({ mode: "demo", ready: Promise.resolve(null) });
       return;
     }
-    document.documentElement.dataset.bookingBackend = "firebase-emulator";
+
+    document.documentElement.dataset.bookingBackend = mode.mode;
     const modeNotice = document.querySelector(".demo-pill");
-    if (modeNotice) modeNotice.textContent = "EMULADOR LOCAL · PAINEL AINDA EM DEMO";
+    if (modeNotice) modeNotice.textContent = mode.mode === "firebase-emulator"
+      ? "EMULADOR LOCAL · PAINEL AINDA EM DEMO"
+      : "FIREBASE DEVELOPMENT · AMBIENTE DE TESTE";
 
-    const base = "https://www.gstatic.com/firebasejs/" + SDK_VERSION + "/";
-    await loadScript(base + "firebase-app-compat.js");
-    await loadScript(base + "firebase-auth-compat.js");
-    await loadScript(base + "firebase-firestore-compat.js");
-    await loadScript(base + "firebase-functions-compat.js");
+    await loadFirebaseSdk();
 
-    if (!window.firebase || typeof window.firebase.initializeApp !== "function") {
-      throw new Error("SDK Firebase indisponível.");
+    let options;
+    if (mode.mode === "firebase-emulator") {
+      options = firebaseOptions();
+    } else {
+      const response = await fetch(mode.configUrl, {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { Accept: "application/json" }
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok || payload.environment !== "development" ||
+          !payload.config?.projectId || payload.config.projectId === PROJECT_ID) {
+        throw new Error(payload?.error || "A configuração remota de desenvolvimento não está disponível. Nenhuma conexão foi iniciada.");
+      }
+      options = payload.config;
     }
 
     const app = window.firebase.apps.length
       ? window.firebase.app()
-      : window.firebase.initializeApp(firebaseOptions());
+      : window.firebase.initializeApp(options);
+    if (app.options.projectId !== options.projectId) {
+      throw new Error("O projeto Firebase já inicializado não corresponde ao ambiente solicitado.");
+    }
 
     const auth = app.auth();
     const firestore = app.firestore();
-    const functions = app.functions();
+    const functions = app.functions("us-central1");
 
-    auth.useEmulator("http://127.0.0.1:9099", { disableWarnings: true });
-    firestore.useEmulator("127.0.0.1", 8080);
-    functions.useEmulator("127.0.0.1", 5001);
+    if (mode.mode === "firebase-emulator") {
+      auth.useEmulator("http://127.0.0.1:9099", { disableWarnings: true });
+      firestore.useEmulator("127.0.0.1", 8080);
+      functions.useEmulator("127.0.0.1", 5001);
+    }
 
     window.BookingFirebaseRuntime = Object.freeze({
-      mode: "firebase-emulator",
-      projectId: PROJECT_ID,
+      mode: mode.mode,
+      projectId: options.projectId,
       app,
       auth,
       firestore,
@@ -95,7 +126,7 @@
   window.BookingFirebaseRuntime = Object.freeze({
     mode: "initializing",
     ready: initialize().catch((error) => {
-      console.error("[AlanSM Booking] Firebase emulator initialization failed:", error);
+      console.error("[AlanSM Booking] Firebase initialization failed:", error);
       window.BookingFirebaseRuntime = Object.freeze({
         mode: "error",
         error,
