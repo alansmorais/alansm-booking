@@ -56,6 +56,8 @@
       return;
     }
     document.documentElement.dataset.bookingBackend = "firebase-emulator";
+    const modeNotice = document.querySelector(".demo-pill");
+    if (modeNotice) modeNotice.textContent = "EMULADOR LOCAL · PAINEL AINDA EM DEMO";
 
     const base = "https://www.gstatic.com/firebasejs/" + SDK_VERSION + "/";
     await loadScript(base + "firebase-app-compat.js");
