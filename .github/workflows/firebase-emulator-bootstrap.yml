@@ -22,9 +22,13 @@ jobs:
           node --check public/firebase-emulator.js
           node --input-type=module --check < functions/api/firebase-config.js
           node --check public/auth.js
+          node --check public/book.js
+          node --check public/booking-demo.js
           node --check public/firebase-auth-adapter.js
           node --check public/firebase-workspace-adapter.js
           node --check public/onboarding-flow.js
+      - name: Test customer booking demo logic
+        run: npm run test:booking-demo
       - name: Test emulator and remote development mode guards
         run: npm run test:firebase-emulator
       - name: Test remote Firebase configuration endpoint
