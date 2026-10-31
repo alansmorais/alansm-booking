@@ -15,10 +15,14 @@ The product is not the AlanSM Solutions marketing website and must remain in its
 - Responsive static dashboard in `public/`.
 - Navigation for overview, appointments, professionals, services, clients, public booking page and settings.
 - Hard-coded Portuguese demo workspace and fictitious records.
-- New appointment modal adds records only to in-memory browser state.
-- Search filters demo appointment/client lists.
-- Several actions are placeholders that only show toast messages.
-- No account registration/login screens, tenant onboarding flow, real calendar availability, persistence, or live public booking flow.
+- New appointment modal adds records only to the local demonstration state.
+- Demo data is persisted in this browser with `localStorage`; it is not synchronized to a backend or other devices.
+- The demo includes client-side availability calculations for working hours, breaks, exceptions, blocks and overlapping appointments.
+- Login and registration screens exist, but `public/auth.js` instantiates only the demo auth adapter, whose sign-in and registration methods deliberately reject requests.
+- Firebase Auth and Firebase workspace adapters exist as modules, but the main app does not initialize or connect them.
+- The dashboard (`public/app.js`) always creates demo data/workspace adapters; appointment, schedule, professional, service and client operations remain local demo operations.
+- The team module contains a Firebase-capable rendering path, but the main app does not configure it with a Firebase workspace adapter.
+- The public booking page is explicitly marked as not published; there is no live public booking journey.
 
 ### Backend foundation
 - Apps Script spreadsheet schema for tenants, users, professionals, services, appointments, clients, audit events, idempotency keys and revoked tokens.
@@ -36,11 +40,12 @@ The product is not the AlanSM Solutions marketing website and must remain in its
 ## Gaps and risks found
 
 1. **Demo vs real operation is easy to confuse.** The dashboard has explicit demo labels, but its primary actions resemble real business workflows.
-2. **No real onboarding or authentication UI.** There is no path for a new business to create an account, enter its workspace, or recover access.
-3. **No functional public booking journey.** The public-page screen displays a placeholder URL on the AlanSM Solutions domain; this is not a working booking page and must not be shared with customers.
-4. **No persistence.** Demo records disappear on reload because they live only in JavaScript memory.
-5. **No real availability engine.** There is no schedule, working-hours, breaks, holidays, booking-window or overlap calculation in the frontend/API.
-6. **Backend is not an API yet.** `doPost` deliberately returns `API_NOT_ENABLED`; the service functions are not wired to HTTP routes.
+2. **Authentication and onboarding are not connected.** The screens exist, but the entry point still uses the demo adapter; users cannot register or sign in through the product UI.
+3. **Firebase adapters are not wired into the main dashboard.** Backend callable functions and client adapters exist, but the main dashboard still creates demo-only adapters and does not read or write live tenant data.
+4. **No functional public booking journey.** The public-page screen correctly states that it is not published; there is no customer-facing booking flow.
+5. **Demo persistence is browser-local only.** `localStorage` preserves fictitious demo state in one browser, but it is not a server database, cross-device sync, or customer-data persistence.
+6. **Availability is demo-only on the frontend.** The local calculator handles schedules, breaks, exceptions, blocks and overlaps, while the authoritative booking validation is in Firebase Functions; the UI is not yet calling those functions for bookings.
+7. **The older Apps Script API remains disabled.** Its `doPost` deliberately returns `API_NOT_ENABLED`; it is a separate pilot foundation and is not the current Firebase Functions API.
 7. **Security/runtime validation remains incomplete.** PBKDF2 cost needs Apps Script benchmarking; JWT test vectors, token revocation, tenant isolation, abuse controls, origin/CSRF strategy, formula injection protection and concurrency tests remain required.
 8. **Frontend rendering needs hardening before accepting untrusted input.** The UI builds HTML strings and inserts them with `innerHTML`; user-provided values must be safely escaped or rendered with DOM text APIs before any real user data is displayed.
 9. **Business model and plan enforcement are only placeholders.** A trial is represented in registration logic, but subscription lifecycle, limits and billing are not implemented.
@@ -79,3 +84,30 @@ The product is not the AlanSM Solutions marketing website and must remain in its
 - Keep this repository separate from AlanSM Solutions website repositories.
 - Do not connect real customer data, external spreadsheet IDs, secrets, payment providers or production domains without explicit approval.
 - Do not claim bookings, authentication or billing are live until end-to-end tests prove them.
+
+
+## Follow-up review — 2026-10-31
+
+Scope: static review of the current `preview` branch at commit `9c36a78d3e330be553c7c6a4735d7821c5e28b73`. No Firebase production project, customer data, secrets or production routing were accessed.
+
+### Confirmed frontend wiring status
+
+- `public/auth.js` calls `BookingAuth.createDemoAdapter()`; the login and registration forms therefore cannot authenticate or create accounts.
+- `public/app.js` calls `BookingData.createDemoAdapter(state)` and `BookingWorkspace.createDemoWorkspaceAdapter(...)`; the primary dashboard remains in demo mode.
+- `public/firebase-auth-adapter.js` and `public/firebase-workspace-adapter.js` expose Firebase-capable adapter factories, but no Firebase SDK initialization or adapter selection is present in the current main-page startup path.
+- `public/team.js` supports a live Firebase mode only after explicit `configureLive()`; the main dashboard currently does not call it.
+- Demo changes are saved to browser `localStorage`, not Firestore.
+- The booking page is marked unpublished, and the appointment modal labels its writes as demonstration-only.
+
+### Next implementation sequence
+
+1. Keep the demo as the default and preserve the explicit demo warning.
+2. Add a separate, opt-in Firebase preview configuration path using emulator-only settings first; do not embed production credentials or silently switch modes.
+3. Connect authentication and tenant onboarding to the existing Firebase adapters and callable functions, then add emulator integration tests for the browser flow.
+4. Connect catalog and agenda reads before enabling any real writes.
+5. Connect schedule, team, client and appointment mutations one domain at a time, with server-side validation and integration tests.
+6. Keep public booking disabled until a customer-facing endpoint and abuse protections are implemented and tested.
+
+### Release decision
+
+The frontend is a functional local prototype, not yet a connected SaaS workspace. Do not invite real businesses to use it for operational bookings. Keep `main` unchanged and do not connect production Firebase, real customer records, payment providers or public booking domains without explicit approval.
