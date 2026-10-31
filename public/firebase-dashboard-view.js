@@ -215,6 +215,60 @@
           row.append(info,remove);blockList.append(row);
         });
       }
+      if (["owner","admin"].includes(tenant.role) && workspace?.getMembers && workspace?.inviteMember && workspace?.updateMember) {
+        const teamPanel=document.createElement("section");
+        teamPanel.className="firebase-readonly-section firebase-management firebase-team-management";
+        teamPanel.innerHTML='<h2>Equipe e acessos</h2><p>Convites são criados com validade de sete dias. A entrega é manual: copie o link e envie apenas ao endereço convidado.</p><div class="firebase-management-status" data-team-status role="status">A carregar equipe…</div><div data-team-list></div><form class="firebase-management-form" data-invite-form><h3>Convidar pessoa</h3><label>E-mail<input name="email" type="email" maxlength="254" required placeholder="pessoa@empresa.com"></label><label>Permissão<select name="role"><option value="staff">Equipe · operação</option>'+(tenant.role==="owner"?'<option value="admin">Administrador</option>':'')+'</select></label><div class="firebase-management-actions"><button class="primary-btn" type="submit">Criar convite</button></div></form><div data-invite-result hidden></div>';
+        data.append(teamPanel);
+        const teamStatus=teamPanel.querySelector("[data-team-status]");
+        const teamList=teamPanel.querySelector("[data-team-list]");
+        const inviteForm=teamPanel.querySelector("[data-invite-form]");
+        const inviteResult=teamPanel.querySelector("[data-invite-result]");
+        const loadTeam=async()=>{
+          teamStatus.textContent="A carregar equipe…";
+          const result=await workspace.getMembers({tenantId:tenant.tenantId});
+          teamList.replaceChildren();
+          const heading=document.createElement("h3");heading.textContent="Membros";teamList.append(heading);
+          (result.members||[]).forEach(member=>{
+            const row=document.createElement("div");row.className="firebase-management-row";
+            const info=document.createElement("div");
+            const name=document.createElement("strong");name.textContent=member.displayName||member.email||"Membro";
+            const detail=document.createElement("span");detail.textContent=(member.email||"")+" · "+member.role+" · "+(member.status==="active"?"Ativo":"Suspenso");
+            info.append(name,detail);row.append(info);
+            if(member.role!=="owner"){
+              const controls=document.createElement("div");controls.className="firebase-management-row-actions";
+              const role=document.createElement("select");role.setAttribute("aria-label","Permissão de "+(member.email||"membro"));
+              role.innerHTML='<option value="staff">Equipe</option>'+(tenant.role==="owner"?'<option value="admin">Administrador</option>':"");
+              role.value=member.role==="admin"&&tenant.role==="owner"?"admin":"staff";
+              const status=document.createElement("select");status.setAttribute("aria-label","Estado de "+(member.email||"membro"));
+              status.innerHTML='<option value="active">Ativo</option><option value="suspended">Suspenso</option>';status.value=member.status==="suspended"?"suspended":"active";
+              const save=document.createElement("button");save.type="button";save.className="secondary-btn";save.textContent="Guardar acesso";
+              save.addEventListener("click",async()=>{save.disabled=true;teamStatus.textContent="A atualizar acesso…";try{await workspace.updateMember({tenantId:tenant.tenantId,memberUid:member.uid,role:role.value,status:status.value});await loadTeam();teamStatus.textContent="Acesso atualizado.";}catch(error){teamStatus.textContent="Não foi possível atualizar: "+(error.message||"erro desconhecido");save.disabled=false;}});
+              controls.append(role,status,save);row.append(controls);
+            }
+            teamList.append(row);
+          });
+          const inviteHeading=document.createElement("h3");inviteHeading.textContent="Convites pendentes";teamList.append(inviteHeading);
+          if(!(result.invitations||[]).length){const empty=document.createElement("p");empty.textContent="Não há convites pendentes.";teamList.append(empty);}
+          (result.invitations||[]).forEach(invite=>{const row=document.createElement("div");row.className="firebase-management-row";const info=document.createElement("span");info.textContent=invite.email+" · "+invite.role+" · expira "+(invite.expiresAtMs?new Date(invite.expiresAtMs).toLocaleDateString("pt-BR"):"—");row.append(info);teamList.append(row);});
+          teamStatus.textContent="Equipe atualizada.";
+        };
+        inviteForm.addEventListener("submit",async event=>{
+          event.preventDefault();const button=inviteForm.querySelector('button[type="submit"]');button.disabled=true;teamStatus.textContent="A criar convite…";inviteResult.hidden=true;inviteResult.replaceChildren();
+          try{
+            const values=new FormData(inviteForm);
+            const result=await workspace.inviteMember({tenantId:tenant.tenantId,email:String(values.get("email")||""),role:String(values.get("role")||"staff")});
+            const link=new URL(window.location.href);link.search="";link.searchParams.set("tenantId",tenant.tenantId);link.searchParams.set("invite",result.invitationToken);
+            const label=document.createElement("strong");label.textContent="Convite criado · entrega manual";
+            const explanation=document.createElement("p");explanation.textContent="Envie este link somente para "+String(values.get("email")||"")+" antes de "+new Date(result.expiresAtMs).toLocaleString("pt-BR")+". O token é mostrado apenas agora.";
+            const input=document.createElement("input");input.type="text";input.readOnly=true;input.value=link.toString();input.setAttribute("aria-label","Link do convite");
+            const copy=document.createElement("button");copy.type="button";copy.className="secondary-btn";copy.textContent="Copiar link";copy.addEventListener("click",async()=>{try{await navigator.clipboard.writeText(input.value);copy.textContent="Link copiado";}catch{input.select();teamStatus.textContent="Selecione e copie o link manualmente."; }});
+            inviteResult.append(label,explanation,input,copy);inviteResult.hidden=false;inviteForm.reset();await loadTeam();teamStatus.textContent="Convite criado. Faça a entrega manual do link.";
+          }catch(error){teamStatus.textContent="Não foi possível criar o convite: "+(error.message||"erro desconhecido");}
+          finally{button.disabled=false;}
+        });
+        try{await loadTeam();}catch(error){teamStatus.textContent="Não foi possível carregar a equipe: "+(error.message||"erro desconhecido");}
+      }
       state.textContent="Dados carregados do Firebase. Ações disponíveis conforme as permissões da sua conta.";
       state.dataset.kind="success";
     } catch(error) {
@@ -230,6 +284,8 @@
   managementStyle.textContent='.firebase-management [hidden]{display:none!important}.firebase-management>p{color:#64748b}.firebase-management-status{padding:10px 12px;background:#f1f5f9;border-radius:9px;margin:12px 0;color:#334155;font-size:13px}.firebase-management-list{display:grid;grid-template-columns:1fr 1fr;gap:16px}.firebase-management-group h3,.firebase-management-form h3{font-size:15px;margin:10px 0}.firebase-management-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #e5e7eb}.firebase-management-row strong,.firebase-management-row span,.firebase-management-row small{display:block}.firebase-management-row span,.firebase-management-row small{font-size:12px;color:#64748b;margin-top:3px}.firebase-management-row-actions,.firebase-management-actions{display:flex;gap:8px;flex-wrap:wrap}.firebase-management-form{border-top:1px solid #e5e7eb;margin-top:18px;padding-top:18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.firebase-management-form h3{grid-column:1/-1}.firebase-management-form label{display:grid;gap:6px;font-size:13px;color:#475569}.firebase-management-form input,.firebase-management-form select{min-width:0;width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.firebase-management-actions{grid-column:1/-1}.firebase-management button:disabled{opacity:.55;cursor:wait}@media(max-width:700px){.firebase-management-list{grid-template-columns:1fr}.firebase-management-form{grid-template-columns:1fr}.firebase-management-row{align-items:flex-start;flex-direction:column}}';
   const scheduleStyle=document.createElement("style");
   scheduleStyle.textContent='.schedule-days{grid-column:1/-1;display:grid;gap:8px}.schedule-day-row{display:grid;grid-template-columns:minmax(150px,1.4fr) 1fr 1fr;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #e5e7eb}.schedule-day-row label{display:flex;align-items:center;gap:8px;font-size:13px;color:#475569}.schedule-day-row input[type=time]{min-width:0;width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}.schedule-day-enabled input{width:auto}.schedule-current{margin-top:18px}.schedule-current h3{font-size:15px}@media(max-width:700px){.schedule-day-row{grid-template-columns:1fr 1fr}.schedule-day-enabled{grid-column:1/-1}}';
+  const teamStyle=document.createElement("style");
+  teamStyle.textContent='.firebase-team-management [data-invite-result]{margin-top:16px;padding:14px;border:1px solid #cbd5e1;border-radius:10px;overflow-wrap:anywhere}.firebase-team-management [data-invite-result] p{font-size:13px;color:#64748b}.firebase-team-management [data-invite-result] input{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin:8px 0}.firebase-team-management [data-team-list]>h3{font-size:15px;margin:18px 0 8px}.firebase-team-management select{padding:8px;border:1px solid #cbd5e1;border-radius:8px;background:var(--card,#fff);color:inherit}';
   document.head.append(managementStyle);
   document.head.append(style);
   window.BookingFirebaseDashboardView=Object.freeze({mount});
