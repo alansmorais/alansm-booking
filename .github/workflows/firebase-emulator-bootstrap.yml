@@ -18,8 +18,17 @@ jobs:
         with:
           node-version: 22
       - name: Check JavaScript syntax
-        run: node --check public/firebase-emulator.js
+        run: |
+          node --check public/firebase-emulator.js
+          node --check public/auth.js
+          node --check public/firebase-auth-adapter.js
+          node --check public/firebase-workspace-adapter.js
+          node --check public/onboarding-flow.js
       - name: Test emulator mode guards
         run: npm run test:firebase-emulator
+      - name: Test Firebase auth and workspace adapters
+        run: npm run test:firebase-adapters
+      - name: Test onboarding verification flow
+        run: npm run test:onboarding
       - name: Validate Firebase emulator configuration
         run: node -e "const f=require('./firebase.json'); if(f.emulators.auth.port!==9099||f.emulators.firestore.port!==8080||f.emulators.functions.port!==5001) process.exit(1); console.log('Emulator ports validated')"
