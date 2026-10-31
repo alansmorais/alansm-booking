@@ -13,6 +13,17 @@
     const shell=document.querySelector(".app-shell");
     if (!content || !shell) throw new Error("A área do painel não foi encontrada.");
     shell.hidden=false;
+    const sidebar=document.getElementById("sidebar");
+    if(sidebar) sidebar.hidden=true;
+    shell.style.gridTemplateColumns="minmax(0,1fr)";
+    const modePill=document.querySelector(".demo-pill");
+    if(modePill) modePill.textContent="FIREBASE · LEITURA";
+    const footer=document.querySelector(".footer");
+    if(footer) footer.innerHTML="<span>AlanSM Booking · Firebase</span><span>Consulta autenticada · somente leitura.</span>";
+    const workspaceName=document.getElementById("workspaceName");
+    const workspaceRole=document.getElementById("workspaceRole");
+    if(workspaceName) workspaceName.textContent=tenant.name;
+    if(workspaceRole) workspaceRole.textContent="Acesso: "+(tenant.role||"membro");
     const today=new Date();
     const end=addDays(today,6);
     const startDate=dateISO(today), endDate=dateISO(end);
