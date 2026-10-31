@@ -27,9 +27,9 @@
     return {services,professionals,schedules:data.professionalSchedules||{},companySchedule:data.companySchedule||{},appointments:data.appointments||[],blocks:data.blocks||[],exceptions:data.exceptions||[],professionalExceptions:data.professionalExceptions||[],clients:data.clients||[],data};
   }
   function getService(id){return config().services.find(s=>s.id===id)||null;}
-  function isException(date,c){return c.exceptions.some(x=>x.date===date)||c.professionalExceptions.some(x=>x.date<=date&&(x.endDate||x.date)>=date);}
+  function isException(date,professional,c){return c.exceptions.some(x=>x.date===date)||c.professionalExceptions.some(x=>x.professional===professional&&x.date<=date&&(x.endDate||x.date)>=date);}
   function slots({date,professional,duration,appointments}){
-    const c=config();if(!date||!professional||!Number.isFinite(Number(duration))||Number(duration)<=0||isException(date,c))return[];
+    const c=config();if(!date||!professional||!Number.isFinite(Number(duration))||Number(duration)<=0||isException(date,professional,c))return[];
     const day=new Date(date+"T12:00:00").getDay(),proPeriods=c.schedules[professional]?.[day]||[];
     const companyPeriods=c.companySchedule?.[day];
     const periods=companyPeriods?proPeriods.filter(p=>companyPeriods.some(cp=>p.start>=cp.start&&p.end<=cp.end)):proPeriods;
