@@ -15,10 +15,11 @@
     "test:invitation-page": "node --test tests/invitation-page.test.mjs",
     "test:team": "node --test tests/team.test.mjs",
     "test:firebase-emulator": "node --test tests/firebase-emulator.test.mjs",
-    "test:all-adapters": "npm run test:booking-demo && npm run test:adapter && npm run test:auth-adapter && npm run test:workspace-adapter && npm run test:onboarding && npm run test:invitation && npm run test:invitation-page && npm run test:firebase-adapters && npm run test:firebase-emulator && npm run test:team && npm run test:firebase-config && npm run test:apps-script",
+    "test:all-adapters": "npm run test:booking-demo && npm run test:snapshot && npm run test:adapter && npm run test:auth-adapter && npm run test:workspace-adapter && npm run test:onboarding && npm run test:invitation && npm run test:invitation-page && npm run test:firebase-adapters && npm run test:firebase-emulator && npm run test:team && npm run test:firebase-config && npm run test:apps-script",
     "test:firebase-config": "node --test tests/firebase-config-function.test.mjs",
     "test:booking-demo": "node --test tests/booking-demo.test.mjs",
-    "test:apps-script": "node --test tests/apps-script-proxy.test.mjs"
+    "test:apps-script": "node --test tests/apps-script-proxy.test.mjs",
+    "test:snapshot": "node --test tests/booking-snapshot.test.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",
