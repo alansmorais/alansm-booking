@@ -1,0 +1,25 @@
+name: Firebase Emulator Bootstrap
+
+on:
+  push:
+    branches: [firebase-emulator-bootstrap]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-emulator-bootstrap:
+    name: Validate local-only emulator bootstrap
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check JavaScript syntax
+        run: node --check public/firebase-emulator.js
+      - name: Test emulator mode guards
+        run: npm run test:firebase-emulator
+      - name: Validate Firebase emulator configuration
+        run: node -e "const f=require('./firebase.json'); if(f.emulators.auth.port!==9099||f.emulators.firestore.port!==8080||f.emulators.functions.port!==5001) process.exit(1); console.log('Emulator ports validated')"
