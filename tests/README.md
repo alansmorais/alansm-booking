@@ -23,24 +23,34 @@ The rules suite checks tenant isolation, inactive membership denial, client-side
 
 ## Browser bootstrap guard
 
-The browser-side emulator bootstrap is loaded by `public/index.html`, but it does not replace the demo adapters yet.
+The browser bootstrap now connects Firebase Authentication and the workspace onboarding flow to local emulators. The dashboard remains demo-only; it is deliberately not shown as a real Firebase workspace.
 
 - Demo remains the default: open the app without a query parameter.
 - The emulator bootstrap can be explicitly requested only on a local hostname with `?backend=firebase-emulator`.
 - It uses the fixed demo project ID `demo-alansm-booking` and local Auth, Firestore and Functions emulator ports 9099, 8080 and 5001.
 - Preview/production hostnames are rejected. No production Firebase configuration is included.
-- The dashboard and login/register forms remain demo-only until the next integration phase.
+- Login, registration, email verification and tenant creation use Auth/Functions Emulator only.
+- A successful Firebase session is shown in a safe status screen; it is not routed into the fictitious demo dashboard.
 
-Run the guard tests with:
+Run the guard and adapter tests with:
 
 ```bash
 npm run test:firebase-emulator
 ```
 
-Start all required local emulators with:
+Start the app and emulators in separate terminals from the repository root:
 
 ```bash
-firebase emulators:start --project demo-alansm-booking --only auth,firestore,functions
+# Terminal 1: install Functions dependencies once
+npm --prefix functions install
+
+# Terminal 2: start local Auth, Firestore and Functions emulators
+npx firebase-tools emulators:start --project demo-alansm-booking --only auth,firestore,functions
+
+# Terminal 3: serve the browser app
+python -m http.server 3000 --directory public
 ```
 
-Then open the local app with `?backend=firebase-emulator`. This initializes the SDK connections only; it does not yet authenticate users or persist dashboard changes.
+Open `http://localhost:3000/?backend=firebase-emulator`. The Emulator UI is at `http://127.0.0.1:4000/`. Create a test account through the app, mark its email as verified in the Auth Emulator UI, and use the app's **Já confirmei o e-mail** action. Tenant creation is performed through the `createTenant` callable Function; the app then reads the session through `getSession`.
+
+Do not use personal/customer data. This is a local integration test, not a production setup. The operational dashboard and persistent catalog/agenda mutations are still not connected.
