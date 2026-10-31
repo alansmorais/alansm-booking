@@ -17,6 +17,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install and compile Firebase Functions
+        run: |
+          npm install --prefix functions --no-audit --no-fund
+          npm run test:functions:build
+      - name: Test stable dashboard snapshot mapping
+        run: npm run test:snapshot
       - name: Check JavaScript syntax
         run: |
           node --check public/firebase-emulator.js
