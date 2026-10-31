@@ -37,9 +37,9 @@ beforeEach(async () => {
 
 after(async () => { await env?.cleanup(); });
 
-test("active member reads tenant metadata but private agenda and client records require server APIs", async () => {
+test("tenant metadata and private operational records require callable APIs", async () => {
   const db = env.authenticatedContext("owner-a").firestore();
-  await assertSucceeds(getDoc(doc(db, "tenants", "tenant-a")));
+  await assertFails(getDoc(doc(db, "tenants", "tenant-a")));
   await assertFails(getDoc(doc(db, "tenants", "tenant-a", "appointments", "appointment-a")));
   await assertFails(getDoc(doc(db, "tenants", "tenant-a", "clients", "client-a")));
   await assertFails(getDoc(doc(db, "tenants", "tenant-a", "professionals", "professional-a")));
