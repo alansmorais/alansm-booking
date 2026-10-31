@@ -1,6 +1,6 @@
-const test=require("node:test");
-const assert=require("node:assert/strict");
-const booking=require("../public/booking-demo.js");
+import test from "node:test";
+import assert from "node:assert/strict";
+import booking from "../public/booking-demo.js";
 
 test("exposes the demo service catalog with durations and prices",()=>{
   assert.equal(booking.services.length,4);
