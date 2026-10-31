@@ -724,3 +724,37 @@ test("staff cannot change company hours, schedule exceptions or time blocks", as
   }, signin.data.idToken);
   assert.equal(block.data.error?.status, "PERMISSION_DENIED", JSON.stringify(block.data));
 });
+
+
+test("cancelAppointment validates document IDs and serializes simultaneous cancellation", async () => {
+  const malformed = await callable("cancelAppointment", {
+    tenantId: "../outside", appointmentId: "invalid"
+  });
+  assert.equal(malformed.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(malformed.data));
+
+  const appointmentId = `cancel-race-${Date.now()}`;
+  const ref = adminDb.doc(`tenants/${tenantId}/appointments/${appointmentId}`);
+  await ref.set({
+    tenantId, professionalId: "cancel-race-professional",
+    serviceId: "cancel-race-service", clientId: "cancel-race-client",
+    startAt: new Date(Date.now() + 6 * 86400000),
+    endAt: new Date(Date.now() + 6 * 86400000 + 3600000),
+    status: "confirmed"
+  });
+
+  const results = await Promise.all([
+    callable("cancelAppointment", { tenantId, appointmentId, reason: "Cancelamento simultâneo A" }),
+    callable("cancelAppointment", { tenantId, appointmentId, reason: "Cancelamento simultâneo B" })
+  ]);
+  assert.ok(results.every((item) => item.data.result?.ok === true),
+    JSON.stringify(results.map((item) => item.data)));
+  assert.equal(results.filter((item) => item.data.result.alreadyCancelled === false).length, 1);
+  assert.equal(results.filter((item) => item.data.result.alreadyCancelled === true).length, 1);
+
+  const stored = await ref.get();
+  assert.equal(stored.data()?.status, "cancelled");
+  const audit = await adminDb.collection(`tenants/${tenantId}/auditLog`).get();
+  const events = audit.docs.filter((doc) =>
+    doc.data().resourceId === appointmentId && doc.data().action === "appointment.cancelled");
+  assert.equal(events.length, 1, "Cancelamentos simultâneos devem gerar somente um evento de auditoria.");
+});
