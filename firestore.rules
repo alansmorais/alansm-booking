@@ -30,13 +30,13 @@ service cloud.firestore {
       }
 
       match /professionals/{professionalId} {
-        allow read: if activeMember(tenantId);
-        allow write: if false;
+        // Browser access is intentionally closed; expose only approved fields via callable APIs.
+        allow read, write: if false;
       }
 
       match /services/{serviceId} {
-        allow read: if activeMember(tenantId);
-        allow write: if false;
+        // Browser access is intentionally closed; expose only approved fields via callable APIs.
+        allow read, write: if false;
       }
 
       match /clients/{clientId} {
@@ -52,13 +52,13 @@ service cloud.firestore {
       }
 
       match /blocks/{blockId} {
-        allow read: if activeMember(tenantId);
-        allow write: if false;
+        // Browser access is intentionally closed; expose only approved fields via callable APIs.
+        allow read, write: if false;
       }
 
       match /scheduleSettings/{settingId} {
-        allow read: if activeMember(tenantId);
-        allow write: if false;
+        // Browser access is intentionally closed; expose only approved fields via callable APIs.
+        allow read, write: if false;
       }
 
       match /auditLog/{eventId} {
