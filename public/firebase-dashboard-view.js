@@ -68,11 +68,52 @@
       data.innerHTML=
         '<div class="firebase-readonly-stats"><article><strong>'+appts.length+'</strong><span>Agendamentos no período</span></article><article><strong>'+professionals.length+'</strong><span>Profissionais</span></article><article><strong>'+services.length+'</strong><span>Serviços</span></article><article><strong>'+blocks.length+'</strong><span>Bloqueios</span></article></div>'+
         '<section class="firebase-readonly-section"><h2>Agenda · '+escape(startDate)+' a '+escape(endDate)+'</h2>'+
-        (appts.length?'<div class="firebase-readonly-table-wrap"><table><thead><tr><th>Data</th><th>Hora</th><th>Cliente</th><th>Serviço</th><th>Profissional</th><th>Estado</th><th>Valor</th></tr></thead><tbody>'+appts.map(a=>'<tr><td>'+escape(a.date)+'</td><td>'+escape(a.time)+'</td><td>'+escape(a.name)+'</td><td>'+escape(a.service)+'</td><td>'+escape(a.professional)+'</td><td>'+escape(a.status)+'</td><td>'+escape(money(a.priceMinor,a.currency))+'</td></tr>').join("")+'</tbody></table></div>':'<p class="firebase-readonly-empty">Não há agendamentos neste período.</p>')+'</section>'+
+        (appts.length?'<div class="firebase-readonly-table-wrap"><table><thead><tr><th>Data</th><th>Hora</th><th>Cliente</th><th>Serviço</th><th>Profissional</th><th>Estado</th><th>Valor</th>'+(["owner","admin"].includes(tenant.role)&&typeof workspace?.cancelAppointment==="function"?"<th>Ações</th>":"")+"</tr></thead><tbody>'+appts.map(a=>'<tr><td>'+escape(a.date)+'</td><td>'+escape(a.time)+'</td><td>'+escape(a.name)+'</td><td>'+escape(a.service)+'</td><td>'+escape(a.professional)+'</td><td>'+escape(a.status)+'</td><td>'+escape(money(a.priceMinor,a.currency))+'</td>'+(["owner","admin"].includes(tenant.role)&&typeof workspace?.cancelAppointment==="function"&&["pending","booked","confirmed"].includes(a.status)?'<td><button type="button" class="secondary-btn" data-cancel-appointment="'+escape(a.id)+'">Cancelar</button></td>':(["owner","admin"].includes(tenant.role)&&typeof workspace?.cancelAppointment==="function"?'<td>—</td>':""))+'</tr>').join("")+'</tbody></table></div>':'<p class="firebase-readonly-empty">Não há agendamentos neste período.</p>')+'</section>'+
         '<div class="firebase-readonly-columns"><section class="firebase-readonly-section"><h2>Profissionais</h2>'+(professionals.length?'<ul>'+professionals.map(p=>'<li>'+escape(p[0])+' <span>'+escape(p[3])+'</span></li>').join("")+'</ul>':'<p class="firebase-readonly-empty">Nenhum profissional cadastrado.</p>')+'</section>'+
         '<section class="firebase-readonly-section"><h2>Serviços</h2>'+(services.length?'<ul>'+services.map(s=>'<li>'+escape(s[0])+' <span>'+escape(s[1]+' min')+' · '+escape(s[2])+'</span></li>').join("")+'</ul>':'<p class="firebase-readonly-empty">Nenhum serviço cadastrado.</p>')+'</section></div>'+
         '<section class="firebase-readonly-section"><h2>Horários e disponibilidade</h2><p>Fuso horário: '+escape(schedule.timezone||"não informado")+'.'+(schedule.truncated?' Alguns registos foram limitados pela consulta.':'')+'</p><p>Os horários e bloqueios foram carregados do workspace autorizado.</p></section>';
 
+
+      if (["owner","admin"].includes(tenant.role) && typeof workspace?.cancelAppointment === "function") {
+        data.addEventListener("click", async event => {
+          const button = event.target.closest("[data-cancel-appointment]");
+          if (!button || button.disabled) return;
+          const appointmentId = button.dataset.cancelAppointment;
+          if (!window.confirm("Confirma o cancelamento desta reserva?")) return;
+          const reason = window.prompt("Motivo do cancelamento (opcional):", "") || "";
+          button.disabled = true;
+          state.textContent = "A cancelar reserva…";
+          state.dataset.kind = "";
+          try {
+            await workspace.cancelAppointment({ tenantId: tenant.tenantId, appointmentId, reason });
+            const refreshed = await dashboard.loadAgenda({ tenantId: tenant.tenantId, startAtMs, endAtMs });
+            const tbody = data.querySelector(".firebase-readonly table tbody");
+            if (tbody) {
+              tbody.replaceChildren();
+              (refreshed.appointments || []).forEach(a => {
+                const tr = document.createElement("tr");
+                [a.date,a.time,a.name,a.service,a.professional,a.status,money(a.priceMinor,a.currency)].forEach(value => {
+                  const td = document.createElement("td"); td.textContent = value; tr.append(td);
+                });
+                const action = document.createElement("td");
+                if (["pending","booked","confirmed"].includes(a.status)) {
+                  const cancel = document.createElement("button");
+                  cancel.type = "button"; cancel.className = "secondary-btn";
+                  cancel.dataset.cancelAppointment = a.id; cancel.textContent = "Cancelar";
+                  action.append(cancel);
+                } else action.textContent = "—";
+                tr.append(action); tbody.append(tr);
+              });
+            }
+            state.textContent = "Reserva cancelada. A agenda foi atualizada.";
+            state.dataset.kind = "success";
+          } catch (error) {
+            state.textContent = "Não foi possível cancelar: " + (error.message || "erro desconhecido");
+            state.dataset.kind = "error";
+            button.disabled = false;
+          }
+        });
+      }
 
       if (typeof workspace?.createAppointment === "function" && typeof workspace?.getClients === "function") {
         const bookingPanel=document.createElement("section");
