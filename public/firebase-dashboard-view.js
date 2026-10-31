@@ -1,5 +1,6 @@
 (() => {
   "use strict";
+  // Authenticated management view; all writes are delegated to tenant-scoped callable functions.
   const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   }[char]));
