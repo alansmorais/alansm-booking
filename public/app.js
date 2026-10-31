@@ -117,6 +117,11 @@ function renderFirebaseView(){
    const proName=id=>pros.find(p=>p.id===id)?.name||"Profissional";
    const serviceName=id=>services.find(s=>s.id===id)?.name||"Serviço";
    const items=Array.isArray(agendaResult.appointments)?agendaResult.appointments:[];
+   let clients=[];
+   if(state.view==="clients"){
+    const clientResult=await firebaseWorkspaceAdapter.getClients({tenantId});
+    clients=Array.isArray(clientResult.clients)?clientResult.clients:[];
+   }
    const money=(minor,currency)=>Number.isSafeInteger(minor)?new Intl.NumberFormat("pt-BR",{style:"currency",currency:currency||"BRL"}).format(minor/100):"—";
    const dateTime=a=>new Date(a.startAtMs).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"});
    const statusLabel={booked:"Reservado",confirmed:"Confirmado",pending:"Pendente",cancelled:"Cancelado",completed:"Concluído",no_show:"Não compareceu"};
@@ -146,8 +151,10 @@ function renderFirebaseView(){
      '<div class="panel settings-card"><form id="firebaseServiceForm" class="form-grid"><input type="hidden" name="itemId"><label>Nome<input name="name" required minlength="2" maxlength="100"></label><label>Duração (minutos)<input name="durationMinutes" type="number" min="5" max="480" step="5" value="30" required></label><label>Preço (unidades mínimas)<input name="priceMinor" type="number" min="0" step="1" value="5000" required></label><label>Moeda<input name="currency" value="PLN" minlength="3" maxlength="3" required></label><button class="primary-btn" type="submit">Guardar serviço</button><button class="secondary-btn" type="button" data-action="clear-catalog-form">Limpar</button></form><small>Exemplo: 5000 = 50,00 PLN.</small></div>'+
      tableHtml(["SERVIÇO","DURAÇÃO","PREÇO","ESTADO","AÇÕES"],services.map(s=>["<strong>"+escapeHTML(s.name)+"</strong>",(s.durationMinutes??"—")+" min",escapeHTML(money(s.priceMinor,s.currency)),'<span class="status">'+escapeHTML(s.status||"Ativo")+'</span>','<button class="secondary-btn" data-action="edit-catalog" data-kind="service" data-id="'+escapeHTML(s.id)+'" data-name="'+escapeHTML(s.name)+'" data-duration="'+escapeHTML(s.durationMinutes)+'" data-price="'+escapeHTML(s.priceMinor)+'" data-currency="'+escapeHTML(s.currency||"PLN")+'">Editar</button> <button class="secondary-btn" data-action="deactivate-catalog" data-kind="service" data-id="'+escapeHTML(s.id)+'">Desativar</button>']));
    }else if(state.view==="clients"){
-    body=heading("Clientes","A leitura de dados pessoais de clientes ainda não foi disponibilizada no backend.")+
-     '<div class="panel settings-card">Nenhum dado fictício será exibido aqui. O endpoint seguro de clientes será implementado numa etapa própria.</div>';
+    body=heading("Clientes","Dados de contacto privados da empresa, disponíveis apenas a membros autenticados.")+
+     '<div class="panel settings-card"><form id="firebaseClientForm" class="form-grid"><input type="hidden" name="clientId"><label>Nome<input name="name" required minlength="2" maxlength="100"></label><label>Telefone<input name="phone" type="tel" maxlength="30"></label><label>E-mail<input name="email" type="email" maxlength="254"></label><label>Notas<textarea name="notes" maxlength="300"></textarea></label><button class="primary-btn" type="submit">Guardar cliente</button><button class="secondary-btn" type="button" data-action="clear-client-form">Limpar</button></form></div>'+
+     '<div class="toolbar"><input class="search-input" id="search" placeholder="Pesquisar nome ou contacto..." value="'+escapeHTML(state.query)+'"></div>'+
+     tableHtml(["CLIENTE","TELEFONE","E-MAIL","NOTAS","AÇÕES"],clients.filter(x=>(x.name+" "+x.phone+" "+x.email).toLowerCase().includes(state.query.toLowerCase())).map(x=>["<strong>"+escapeHTML(x.name)+"</strong>",escapeHTML(x.phone||"—"),escapeHTML(x.email||"—"),escapeHTML(x.notes||"—"),'<button class="secondary-btn" data-action="edit-client" data-id="'+escapeHTML(x.id)+'" data-name="'+escapeHTML(x.name)+'" data-phone="'+escapeHTML(x.phone||"")+'" data-email="'+escapeHTML(x.email||"")+'" data-notes="'+escapeHTML(x.notes||"")+'">Editar</button> <button class="secondary-btn" data-action="deactivate-client" data-id="'+escapeHTML(x.id)+'">Desativar</button>']));
    }else if(state.view==="team"){
     body=heading("Equipe e acessos","A gestão de membros será ligada nesta etapa seguinte.")+
      '<div class="panel settings-card">Os dados de membros ainda não estão integrados nesta vista.</div>';
@@ -225,6 +232,36 @@ document.addEventListener("click",async e=>{
   if(!window.confirm("Desativar este cadastro? Ele deixará de estar disponível para novos agendamentos."))return;
   try{await firebaseWorkspaceAdapter.saveCatalogItem({kind:button.dataset.kind,itemId:button.dataset.id,status:"inactive"});firebaseCatalog=null;render();toast("Cadastro desativado.");}
   catch(error){toast(error.message||"Não foi possível desativar.");}
+ }
+});
+document.addEventListener("submit",async e=>{
+ const form=e.target;if(!firebaseMode||form.id!=="firebaseClientForm")return;
+ e.preventDefault();
+ const values=new FormData(form);
+ try{
+  await firebaseWorkspaceAdapter.saveClient({
+   clientId:String(values.get("clientId")||""),name:String(values.get("name")||"").trim(),
+   phone:String(values.get("phone")||"").trim(),email:String(values.get("email")||"").trim(),
+   notes:String(values.get("notes")||"").trim()
+  });
+  render();toast("Cliente guardado com segurança.");
+ }catch(error){toast(error.message||"Não foi possível guardar o cliente.");}
+});
+document.addEventListener("click",async e=>{
+ const button=e.target.closest('[data-action]');if(!button||!firebaseMode)return;
+ if(button.dataset.action==="clear-client-form"){
+  const form=document.getElementById("firebaseClientForm");form?.reset();if(form?.elements.clientId)form.elements.clientId.value="";return;
+ }
+ if(button.dataset.action==="edit-client"){
+  const form=document.getElementById("firebaseClientForm");if(!form)return;
+  form.elements.clientId.value=button.dataset.id||"";form.elements.name.value=button.dataset.name||"";
+  form.elements.phone.value=button.dataset.phone||"";form.elements.email.value=button.dataset.email||"";
+  form.elements.notes.value=button.dataset.notes||"";form.scrollIntoView({behavior:"smooth",block:"center"});form.elements.name.focus();return;
+ }
+ if(button.dataset.action==="deactivate-client"){
+  if(!window.confirm("Desativar este cliente? O histórico de agendamentos será preservado."))return;
+  try{await firebaseWorkspaceAdapter.saveClient({clientId:button.dataset.id,status:"inactive"});render();toast("Cliente desativado.");}
+  catch(error){toast(error.message||"Não foi possível desativar o cliente.");}
  }
 });
 document.addEventListener("submit",e=>{if(e.target.id==="professionalScheduleForm"){e.preventDefault();const f=e.target,person=f.elements.professional.value,next={};for(const d of [1,2,3,4,5,6,0]){if(!f.elements["open-"+d].checked){next[d]=[];continue;}const start=f.elements["start-"+d].value,end=f.elements["end-"+d].value,bs=f.elements["break-start-"+d].value,be=f.elements["break-end-"+d].value,company=state.companySchedule[d]||[];if(!start||!end||start>=end||!company.some(p=>start>=p.start&&end<=p.end)){toast("O horário individual deve estar dentro do horário da empresa.");return;}if((bs&&!be)||(!bs&&be)||(bs&&!(start<bs&&bs<be&&be<end))){toast("Intervalo inválido.");return;}const start2=f.elements["start2-"+d].value,end2=f.elements["end2-"+d].value,periods=[{start,end,breaks:bs?[{start:bs,end:be}]:[]}];if((start2&&!end2)||(!start2&&end2)||(start2&&start2>=end2)){toast("Verifique o segundo período.");return;}if(start2){if(start2<end){toast("O segundo período deve começar após o primeiro.");return;}if(!company.some(p=>start2>=p.start&&end2<=p.end)){toast("O segundo período deve estar dentro do horário da empresa.");return;}periods.push({start:start2,end:end2,breaks:[]});}next[d]=periods;}state.professionalSchedules[person]=next;persistDemoState();render();toast("Horário individual atualizado.");}});
