@@ -146,17 +146,43 @@
       return;
     }
     const list = tenants.map((tenant) => tenant.name + " (" + tenant.role + ")").join(", ");
+    const actions = tenants.map((tenant) => ({
+      label: "Abrir " + tenant.name + " · leitura",
+      action: async () => {
+        try {
+          await firebaseWorkspace.selectTenant(tenant.tenantId);
+          const dashboard = window.BookingFirebaseDashboard.createFirebaseDashboardAdapter({
+            workspace: firebaseWorkspace,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+          });
+          await window.BookingFirebaseDashboardView.mount({
+            tenant, user, workspace: firebaseWorkspace, dashboard,
+            onSignOut: async () => {
+              await firebaseAuth.signOut();
+              document.getElementById("authGate").hidden = false;
+              document.body.classList.remove("demo-entered");
+              showAuthForms();
+              setNotice("Sessão terminada", "A conta foi desconectada do ambiente " + firebaseModeName + ".");
+            }
+          });
+          gate.hidden = true;
+          document.body.classList.add("firebase-readonly-entered");
+        } catch (error) { notify(error.message || "Não foi possível abrir o painel."); }
+      }
+    }));
+    actions.push({
+      label: "Terminar sessão",
+      secondary: true,
+      action: async () => {
+        await firebaseAuth.signOut();
+        showAuthForms();
+        setNotice("Sessão terminada", "A conta foi desconectada do ambiente " + firebaseModeName + ".");
+      }
+    });
     showFirebaseStatus(
       "Autenticação Firebase conectada",
-      "Sessão: " + (user.email || "utilizador") + ". Empresas: " + list + ". A criação e a leitura da sessão já usam Cloud Functions no ambiente conectado. O painel operacional ainda não está integrado ao Firestore; por segurança, os dados de demonstração não serão apresentados como dados reais.",
-      [{
-        label: "Terminar sessão",
-        action: async () => {
-          await firebaseAuth.signOut();
-          showAuthForms();
-          setNotice("Sessão terminada", "A conta foi desconectada do ambiente " + firebaseModeName + ".");
-        }
-      }]
+      "Sessão: " + (user.email || "utilizador") + ". Empresas autorizadas: " + list + ". Abra uma empresa para consultar catálogo, horários e agenda em modo somente leitura. Nenhum dado de demonstração será usado.",
+      actions
     );
   }
 
