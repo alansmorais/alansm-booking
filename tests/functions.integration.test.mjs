@@ -433,7 +433,78 @@ test("createAppointment enforces idempotency and prevents overlapping concurrent
   const outsideHoursAppointments = await adminDb.collection(`${base}/appointments`)
     .where("startAt", "==", new Date(startAtMs + 6 * 60 * 60 * 1000))
     .get();
+
   assert.equal(outsideHoursAppointments.size, 0, "A reserva fora do horário não deve ser gravada.");
+
+  // Reopen schedules, then verify a break blocks a booking that overlaps it.
+  const localParts = (ms) => {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Warsaw", year: "numeric", month: "2-digit",
+      day: "2-digit", weekday: "short", hour: "2-digit", minute: "2-digit",
+      hourCycle: "h23"
+    }).formatToParts(new Date(ms));
+    return Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  };
+  const clock = (hour, minute) => `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  const weekdayNumber = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const makeOpenDays = () => Object.fromEntries(Array.from({ length: 7 }, (_, day) => [
+    String(day), [{ start: "00:00", end: "23:59", breaks: [] }]
+  ]));
+
+  const breakStart = startAtMs + 8 * 60 * 60 * 1000;
+  const breakLocal = localParts(breakStart);
+  const breakWeekday = String(weekdayNumber[breakLocal.weekday]);
+  const breakMinute = Number(breakLocal.hour) * 60 + Number(breakLocal.minute);
+  const breakDays = makeOpenDays();
+  breakDays[breakWeekday] = [{
+    start: "00:00", end: "23:59",
+    breaks: [{ start: clock(Number(breakLocal.hour), Number(breakLocal.minute)),
+      end: clock(Math.floor((breakMinute + 30) / 60), (breakMinute + 30) % 60) }]
+  }];
+  await Promise.all([
+    adminDb.doc(`${base}/scheduleSettings/company`).set({ tenantId, days: makeOpenDays() }),
+    adminDb.doc(`${base}/scheduleSettings/professional_${professionalId}`).set({
+      tenantId, scope: "professional", professionalId, days: breakDays
+    })
+  ]);
+  const duringBreak = await callable("createAppointment", {
+    ...payload, startAtMs: breakStart, idempotencyKey: `during-break-${Date.now()}`
+  });
+  assert.equal(duringBreak.data.error?.status, "FAILED_PRECONDITION", JSON.stringify(duringBreak.data));
+
+  // A company-wide time block must reject a direct booking request.
+  const blockStart = startAtMs + 10 * 60 * 60 * 1000;
+  const blockLocal = localParts(blockStart);
+  const blockDate = `${blockLocal.year}-${blockLocal.month}-${blockLocal.day}`;
+  const blockCreated = await callable("saveScheduleBlock", {
+    tenantId, date: blockDate,
+    start: clock(Number(blockLocal.hour), Number(blockLocal.minute)),
+    end: clock(Math.floor((Number(blockLocal.hour) * 60 + Number(blockLocal.minute) + 30) / 60),
+      (Number(blockLocal.hour) * 60 + Number(blockLocal.minute) + 30) % 60),
+    reason: "Bloqueio de teste"
+  });
+  assert.equal(blockCreated.data.result?.ok, true, JSON.stringify(blockCreated.data));
+  await adminDb.doc(`${base}/scheduleSettings/professional_${professionalId}`).set({
+    tenantId, scope: "professional", professionalId, days: makeOpenDays()
+  });
+  const duringBlock = await callable("createAppointment", {
+    ...payload, startAtMs: blockStart, idempotencyKey: `during-block-${Date.now()}`
+  });
+  assert.equal(duringBlock.data.error?.status, "ALREADY_EXISTS", JSON.stringify(duringBlock.data));
+
+  // A professional absence must reject bookings only for that professional.
+  const absenceStart = startAtMs + 12 * 60 * 60 * 1000;
+  const absenceLocal = localParts(absenceStart);
+  const absenceDate = `${absenceLocal.year}-${absenceLocal.month}-${absenceLocal.day}`;
+  const absence = await callable("saveScheduleException", {
+    tenantId, kind: "professionalAbsence", professionalId,
+    startDate: absenceDate, endDate: absenceDate, reason: "Ausência de teste"
+  });
+  assert.equal(absence.data.result?.ok, true, JSON.stringify(absence.data));
+  const duringAbsence = await callable("createAppointment", {
+    ...payload, startAtMs: absenceStart, idempotencyKey: `during-absence-${Date.now()}`
+  });
+  assert.equal(duringAbsence.data.error?.status, "FAILED_PRECONDITION", JSON.stringify(duringAbsence.data));
 });
 
 
