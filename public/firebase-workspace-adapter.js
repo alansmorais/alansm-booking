@@ -167,6 +167,74 @@
         return invoke("getAgendaAppointments", {
           tenantId: id, startAtMs, endAtMs, ...(professionalId ? { professionalId } : {})
         });
+      },
+      async getScheduleSettings({ tenantId } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        return invoke("getScheduleSettings", { tenantId: id });
+      },
+      async saveScheduleSettings({ tenantId, scope = "company", professionalId = "", days } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        if (!["company", "professional"].includes(scope)) throw new Error("Âmbito de horários inválido.");
+        if (scope === "professional" && !professionalId) throw new Error("Selecione o profissional.");
+        if (!days || typeof days !== "object") throw new Error("Horários inválidos.");
+        return invoke("saveScheduleSettings", {
+          tenantId: id, scope, professionalId, days
+        });
+      },
+      async saveScheduleException({ tenantId, kind, professionalId = "", startDate, endDate, reason } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        if (!["companyClosure", "professionalAbsence"].includes(kind)) throw new Error("Tipo de exceção inválido.");
+        if (!startDate) throw new Error("Data de início obrigatória.");
+        return invoke("saveScheduleException", {
+          tenantId: id, kind, professionalId, startDate, endDate: endDate || startDate, reason: reason || ""
+        });
+      },
+      async saveScheduleBlock({ tenantId, blockId = "", date, start, end, professionalId = "", reason = "", remove = false } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        return invoke("saveScheduleBlock", {
+          tenantId: id, blockId, date, start, end, professionalId, reason, remove
+        });
+      },
+      async createAppointment({ tenantId, professionalId, serviceId, clientId, startAtMs, notes = "", idempotencyKey } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        if (!professionalId || !serviceId || !clientId || !startAtMs) {
+          throw new Error("Preencha todos os campos do agendamento.");
+        }
+        const key = idempotencyKey || `appt-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        return invoke("createAppointment", {
+          tenantId: id, professionalId, serviceId, clientId, startAtMs, notes, idempotencyKey: key
+        });
+      },
+      async cancelAppointment({ tenantId, appointmentId, reason = "" } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        if (!appointmentId) throw new Error("Identificador do agendamento obrigatório.");
+        return invoke("cancelAppointment", {
+          tenantId: id, appointmentId, reason
+        });
+      },
+      async updateAppointmentStatus({ tenantId, appointmentId, status } = {}) {
+        const id = await requireSelectedTenant(tenantId);
+        if (!appointmentId || !status) throw new Error("Agendamento e estado são obrigatórios.");
+        return invoke("updateAppointmentStatus", {
+          tenantId: id, appointmentId, status
+        });
+      },
+      async getPublicBookingPage({ slug } = {}) {
+        if (!slug) throw new Error("Endereço da empresa obrigatório.");
+        return invoke("getPublicBookingPage", { slug });
+      },
+      async getPublicAvailability({ slug, serviceId, professionalId = "", date } = {}) {
+        if (!slug || !serviceId || !date) throw new Error("Dados da consulta incompletos.");
+        return invoke("getPublicAvailability", { slug, serviceId, professionalId, date });
+      },
+      async createPublicAppointment({ slug, serviceId, professionalId = "", startAtMs, clientName, clientPhone, clientEmail = "", notes = "", idempotencyKey } = {}) {
+        if (!slug || !serviceId || !startAtMs || !clientName || !clientPhone) {
+          throw new Error("Preencha todos os dados obrigatórios da reserva.");
+        }
+        const key = idempotencyKey || `pub-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        return invoke("createPublicAppointment", {
+          slug, serviceId, professionalId, startAtMs, clientName, clientPhone, clientEmail, notes, idempotencyKey: key
+        });
       }
     });
   }

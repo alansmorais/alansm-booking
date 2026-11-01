@@ -539,6 +539,7 @@ export const createAppointment = onCall(
         professionalId,
         serviceId,
         clientId,
+        clientName: cleanText(clientSnap.data()?.name, 100),
         startAt,
         endAt,
         status: "booked",
@@ -870,6 +871,8 @@ export const getAgendaAppointments = onCall(
         professionalId: cleanText(value.professionalId, 128),
         serviceId: cleanText(value.serviceId, 128),
         clientId: cleanText(value.clientId, 128),
+        clientName: cleanText(value.clientName, 100),
+        notes: cleanText(value.notes, 500),
         startAtMs: startMs,
         endAtMs: endMs,
         status: cleanText(value.status, 24),
@@ -1226,5 +1229,598 @@ export const saveTenantClient = onCall(
       });
     });
     return { ok: true, clientId: ref.id, status };
+  }
+);
+
+/**
+ * Reads complete schedule configuration (company opening hours, professional
+ * individual schedules, date exceptions/closures, absences, and time blocks).
+ */
+export const getScheduleSettings = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 20 },
+  async (request) => {
+    const auth = requireUser(request);
+    const tenantId = cleanText((request.data || {}).tenantId, 128);
+    await requireTenantReader(auth.uid, tenantId);
+
+    const [companyDoc, proDocs, exceptionsDocs, proExceptionsDocs, blocksDocs] = await Promise.all([
+      db.doc(`tenants/${tenantId}/scheduleSettings/company`).get(),
+      db.collection(`tenants/${tenantId}/scheduleSettings`).where("scope", "==", "professional").limit(100).get(),
+      db.collection(`tenants/${tenantId}/scheduleExceptions`).limit(200).get(),
+      db.collection(`tenants/${tenantId}/professionalExceptions`).limit(200).get(),
+      db.collection(`tenants/${tenantId}/blocks`).limit(200).get()
+    ]);
+
+    const defaultCompanyDays: Record<string, unknown> = {
+      0: [],
+      1: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+      2: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+      3: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+      4: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+      5: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+      6: [{ start: "09:00", end: "14:00", breaks: [] }]
+    };
+
+    const companySchedule = companyDoc.exists && companyDoc.data()?.days
+      ? companyDoc.data()?.days
+      : defaultCompanyDays;
+
+    const professionalSchedules: Record<string, unknown> = {};
+    for (const doc of proDocs.docs) {
+      const data = doc.data();
+      const pid = cleanText(data.professionalId, 128);
+      if (pid && data.days) professionalSchedules[pid] = data.days;
+    }
+
+    const exceptions = exceptionsDocs.docs.map((doc) => {
+      const d = doc.data();
+      return { id: doc.id, date: cleanText(d.date, 10), reason: cleanText(d.reason, 120) };
+    });
+
+    const professionalExceptions = proExceptionsDocs.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        date: cleanText(d.date, 10),
+        professionalId: cleanText(d.professionalId, 128),
+        reason: cleanText(d.reason, 120)
+      };
+    });
+
+    const blocks = blocksDocs.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        date: cleanText(d.date, 10),
+        start: cleanText(d.start, 5),
+        end: cleanText(d.end, 5),
+        professionalId: d.professionalId ? cleanText(d.professionalId, 128) : null,
+        reason: cleanText(d.reason, 240)
+      };
+    });
+
+    return {
+      ok: true,
+      companySchedule,
+      professionalSchedules,
+      exceptions,
+      professionalExceptions,
+      blocks
+    };
+  }
+);
+
+/**
+ * Updates appointment operational status (confirmed, completed, no_show).
+ */
+export const updateAppointmentStatus = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 20 },
+  async (request) => {
+    const auth = requireUser(request);
+    const input = (request.data || {}) as { tenantId?: unknown; appointmentId?: unknown; status?: unknown };
+    const tenantId = cleanText(input.tenantId, 128);
+    const appointmentId = cleanText(input.appointmentId, 128);
+    const status = cleanText(input.status, 20);
+
+    if (!validDocumentId(tenantId) || !validDocumentId(appointmentId) ||
+        !["confirmed", "completed", "no_show"].includes(status)) {
+      throw new HttpsError("invalid-argument", "Empresa, agendamento ou estado inválido.");
+    }
+
+    await requireTenantReader(auth.uid, tenantId);
+    const apptRef = db.doc(`tenants/${tenantId}/appointments/${appointmentId}`);
+    const auditRef = db.collection(`tenants/${tenantId}/auditLog`).doc();
+    const now = FieldValue.serverTimestamp();
+
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(apptRef);
+      if (!snap.exists) throw new HttpsError("not-found", "Agendamento não encontrado.");
+      if (snap.data()?.status === "cancelled") {
+        throw new HttpsError("failed-precondition", "Um agendamento cancelado não pode ter o estado alterado.");
+      }
+      tx.update(apptRef, { status, updatedAt: now, updatedBy: auth.uid });
+      tx.create(auditRef, {
+        tenantId,
+        actorUid: auth.uid,
+        action: "appointment.status_updated",
+        resourceType: "appointment",
+        resourceId: appointmentId,
+        status,
+        createdAt: now
+      });
+    });
+
+    return { ok: true, appointmentId, status };
+  }
+);
+
+/**
+ * Public catalog lookup by slug. Exposes only public details of active services
+ * and active professionals for end-customer booking.
+ */
+export const getPublicBookingPage = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 50 },
+  async (request) => {
+    const slug = normalizeSlug(cleanText((request.data || {}).slug, 80));
+    if (slug.length < 3 || RESERVED_SLUGS.has(slug)) {
+      throw new HttpsError("invalid-argument", "Endereço público inválido.");
+    }
+
+    const slugSnap = await db.doc(`tenantSlugs/${slug}`).get();
+    if (!slugSnap.exists) {
+      throw new HttpsError("not-found", "Empresa não encontrada.");
+    }
+    const tenantId = cleanText(slugSnap.data()?.tenantId, 128);
+    const tenantSnap = await db.doc(`tenants/${tenantId}`).get();
+    if (!tenantSnap.exists || tenantSnap.data()?.status !== "active") {
+      throw new HttpsError("not-found", "Empresa não disponível.");
+    }
+
+    const tenantData = tenantSnap.data()!;
+    const [professionalsSnap, servicesSnap] = await Promise.all([
+      db.collection(`tenants/${tenantId}/professionals`).where("status", "==", "active").limit(100).get(),
+      db.collection(`tenants/${tenantId}/services`).where("status", "==", "active").limit(200).get()
+    ]);
+
+    return {
+      ok: true,
+      tenant: {
+        tenantId,
+        name: cleanText(tenantData.name, 80),
+        slug,
+        timezone: cleanText(tenantData.timezone || "America/Sao_Paulo", 80),
+        currency: cleanText(tenantData.currency || "BRL", 3)
+      },
+      professionals: professionalsSnap.docs.map((doc) => {
+        const val = doc.data();
+        return {
+          id: doc.id,
+          name: cleanText(val.name || val.displayName, 100),
+          color: typeof val.color === "string" ? cleanText(val.color, 20) : "#336699"
+        };
+      }),
+      services: servicesSnap.docs.map((doc) => {
+        const val = doc.data();
+        return {
+          id: doc.id,
+          name: cleanText(val.name || val.title, 100),
+          durationMinutes: Number.isInteger(val.durationMinutes) ? val.durationMinutes : 30,
+          priceMinor: Number.isSafeInteger(val.priceMinor) ? val.priceMinor : 0,
+          currency: /^[A-Z]{3}$/.test(val.currency) ? val.currency : "BRL"
+        };
+      })
+    };
+  }
+);
+
+/**
+ * Public slot availability query. Generates available booking slots based on
+ * authoritative company hours, professional hours, breaks, exceptions, blocks,
+ * and current bookings.
+ */
+export const getPublicAvailability = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 50 },
+  async (request) => {
+    const input = (request.data || {}) as {
+      slug?: unknown; serviceId?: unknown; professionalId?: unknown; date?: unknown;
+    };
+    const slug = normalizeSlug(cleanText(input.slug, 80));
+    const serviceId = cleanText(input.serviceId, 128);
+    const professionalId = cleanText(input.professionalId, 128);
+    const date = input.date;
+
+    if (slug.length < 3 || !validDocumentId(serviceId) || !isLocalDate(date)) {
+      throw new HttpsError("invalid-argument", "Parâmetros de consulta inválidos.");
+    }
+
+    const slugSnap = await db.doc(`tenantSlugs/${slug}`).get();
+    if (!slugSnap.exists) throw new HttpsError("not-found", "Empresa não encontrada.");
+    const tenantId = cleanText(slugSnap.data()?.tenantId, 128);
+    const tenantSnap = await db.doc(`tenants/${tenantId}`).get();
+    if (!tenantSnap.exists || tenantSnap.data()?.status !== "active") {
+      throw new HttpsError("not-found", "Empresa não disponível.");
+    }
+
+    const tenant = tenantSnap.data()!;
+    const timezone = cleanText(tenant.timezone || "America/Sao_Paulo", 80);
+
+    const serviceSnap = await db.doc(`tenants/${tenantId}/services/${serviceId}`).get();
+    if (!serviceSnap.exists || serviceSnap.data()?.status !== "active") {
+      throw new HttpsError("not-found", "Serviço não disponível.");
+    }
+    const duration = Number(serviceSnap.data()?.durationMinutes) || 30;
+
+    let activePros: Array<{ id: string; name: string }> = [];
+    if (professionalId) {
+      const pSnap = await db.doc(`tenants/${tenantId}/professionals/${professionalId}`).get();
+      if (!pSnap.exists || pSnap.data()?.status !== "active") {
+        throw new HttpsError("not-found", "Profissional não disponível.");
+      }
+      activePros = [{ id: professionalId, name: cleanText(pSnap.data()?.name, 100) }];
+    } else {
+      const allPros = await db.collection(`tenants/${tenantId}/professionals`).where("status", "==", "active").limit(50).get();
+      activePros = allPros.docs.map((d) => ({ id: d.id, name: cleanText(d.data().name, 100) }));
+    }
+
+    if (!activePros.length) {
+      return { ok: true, date, slots: [] };
+    }
+
+    const closureSnap = await db.doc(`tenants/${tenantId}/scheduleExceptions/${date}`).get();
+    if (closureSnap.exists) {
+      return { ok: true, date, slots: [] };
+    }
+
+    const companySchedSnap = await db.doc(`tenants/${tenantId}/scheduleSettings/company`).get();
+    const defaultCompanyDays: Record<string, unknown> = {
+      0: [],
+      1: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+      2: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+      3: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+      4: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+      5: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+      6: [{ start: "09:00", end: "14:00", breaks: [] }]
+    };
+    const companyDays = (companySchedSnap.exists && companySchedSnap.data()?.days) || defaultCompanyDays;
+
+    const testDate = new Date(`${date}T12:00:00.000Z`);
+    const dateParts = localDateParts(testDate, timezone);
+    const weekday = dateParts.weekday;
+
+    const queryStart = new Date(testDate.getTime() - 36 * 3600 * 1000);
+    const queryEnd = new Date(testDate.getTime() + 36 * 3600 * 1000);
+    const [blocksSnap, apptsSnap] = await Promise.all([
+      db.collection(`tenants/${tenantId}/blocks`).where("date", "==", date).get(),
+      db.collection(`tenants/${tenantId}/appointments`).where("startAt", ">=", queryStart)
+        .where("startAt", "<=", queryEnd).get()
+    ]);
+
+    const activeAppts = apptsSnap.docs.map((d) => d.data()).filter((a) => {
+      if (!["confirmed", "booked", "pending"].includes(a.status)) return false;
+      const aStartParts = localDateParts(a.startAt.toDate(), timezone);
+      return aStartParts.date === date;
+    });
+
+    const companyPeriods = (companyDays[String(weekday)] as SchedulePeriod[] | undefined) || [];
+    if (!companyPeriods.length) {
+      return { ok: true, date, slots: [] };
+    }
+
+    const proSchedules: Record<string, SchedulePeriod[]> = {};
+    const proAbsences = new Set<string>();
+
+    await Promise.all(activePros.map(async (p) => {
+      const [schedSnap, absenceSnap] = await Promise.all([
+        db.doc(`tenants/${tenantId}/scheduleSettings/professional_${p.id}`).get(),
+        db.doc(`tenants/${tenantId}/professionalExceptions/${p.id}_${date}`).get()
+      ]);
+      if (absenceSnap.exists) {
+        proAbsences.add(p.id);
+      }
+      proSchedules[p.id] = (schedSnap.exists && schedSnap.data()?.days?.[String(weekday)]) || companyPeriods;
+    }));
+
+    let minMinute = 1440;
+    let maxMinute = 0;
+    for (const cp of companyPeriods) {
+      const s = clockMinutes(cp.start);
+      const e = clockMinutes(cp.end);
+      if (s !== null && s < minMinute) minMinute = s;
+      if (e !== null && e > maxMinute) maxMinute = e;
+    }
+
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const nowMs = Date.now();
+    const candidateSlots: Array<{ time: string; available: boolean; professionalId?: string }> = [];
+
+    for (let m = minMinute; m + duration <= maxMinute; m += 30) {
+      const slotTime = `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+      const slotStart = m;
+      const slotEnd = m + duration;
+
+      if (!scheduleCovers(companyPeriods, slotStart, slotEnd)) {
+        continue;
+      }
+
+      const currentParts = localDateParts(new Date(nowMs), timezone);
+      if (date === currentParts.date && m <= currentParts.minute + 15) {
+        continue;
+      }
+
+      let availableProId: string | null = null;
+      for (const pro of activePros) {
+        if (proAbsences.has(pro.id)) continue;
+        const periods = proSchedules[pro.id] || companyPeriods;
+        if (!scheduleCovers(periods, slotStart, slotEnd)) continue;
+
+        const blocked = blocksSnap.docs.some((doc) => {
+          const b = doc.data();
+          if (b.professionalId && b.professionalId !== pro.id) return false;
+          const bs = clockMinutes(b.start);
+          const be = clockMinutes(b.end);
+          return bs !== null && be !== null && bs < be && slotStart < be && bs < slotEnd;
+        });
+        if (blocked) continue;
+
+        const hasOverlap = activeAppts.some((appt) => {
+          if (appt.professionalId !== pro.id) return false;
+          const aStartParts = localDateParts(appt.startAt.toDate(), timezone);
+          const aEndParts = localDateParts(appt.endAt.toDate(), timezone);
+          const as = aStartParts.minute;
+          const ae = aEndParts.minute;
+          return slotStart < ae && as < slotEnd;
+        });
+        if (hasOverlap) continue;
+
+        availableProId = pro.id;
+        break;
+      }
+
+      if (availableProId) {
+        candidateSlots.push({ time: slotTime, available: true, professionalId: availableProId });
+      }
+    }
+
+    return { ok: true, date, slots: candidateSlots };
+  }
+);
+
+/**
+ * Public customer booking creation endpoint.
+ * Performs anti-abuse verification, client record upsert, and atomic transaction booking.
+ */
+export const createPublicAppointment = onCall(
+  { region: REGION, enforceAppCheck: false, maxInstances: 30 },
+  async (request) => {
+    const input = (request.data || {}) as {
+      slug?: unknown; serviceId?: unknown; professionalId?: unknown;
+      startAtMs?: unknown; clientName?: unknown; clientPhone?: unknown;
+      clientEmail?: unknown; notes?: unknown; idempotencyKey?: unknown;
+    };
+    const slug = normalizeSlug(cleanText(input.slug, 80));
+    const serviceId = cleanText(input.serviceId, 128);
+    const professionalId = cleanText(input.professionalId, 128);
+    const startAtMs = input.startAtMs;
+    const clientName = cleanText(input.clientName, 100);
+    const clientPhone = cleanText(input.clientPhone, 30);
+    const clientEmail = cleanText(input.clientEmail, 254).toLowerCase();
+    const notes = cleanText(input.notes, 500);
+    const idempotencyKey = cleanText(input.idempotencyKey, 128);
+
+    if (slug.length < 3 || !validDocumentId(serviceId) ||
+        clientName.length < 2 || !/^[+0-9() .-]{7,30}$/.test(clientPhone) ||
+        (clientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail)) ||
+        idempotencyKey.length < 8 || !Number.isSafeInteger(startAtMs)) {
+      throw new HttpsError("invalid-argument", "Dados de agendamento incompletos ou inválidos.");
+    }
+
+    const startMs = startAtMs as number;
+    const nowMs = Date.now();
+    const slotMs = SLOT_MINUTES * 60_000;
+    if (startMs % slotMs !== 0 || startMs <= nowMs ||
+        startMs > nowMs + MAX_BOOKING_DAYS_AHEAD * 86_400_000) {
+      throw new HttpsError("invalid-argument", "Escolha um horário futuro válido em intervalos de cinco minutos.");
+    }
+
+    const slugSnap = await db.doc(`tenantSlugs/${slug}`).get();
+    if (!slugSnap.exists) throw new HttpsError("not-found", "Empresa não encontrada.");
+    const tenantId = cleanText(slugSnap.data()?.tenantId, 128);
+    const tenantRef = db.doc(`tenants/${tenantId}`);
+
+    // Anti-abuse: Check recent appointments created with same phone in this tenant (max 5 per 24 hours)
+    const recentPhoneAppts = await db.collection(`tenants/${tenantId}/appointments`)
+      .where("clientPhone", "==", clientPhone)
+      .where("createdAt", ">=", new Date(nowMs - 86_400_000))
+      .get();
+    if (recentPhoneAppts.size >= 5) {
+      throw new HttpsError("resource-exhausted", "Limite diário de agendamentos atingido para este número.");
+    }
+
+    let resolvedClientId = "";
+    const clientMatch = await db.collection(`tenants/${tenantId}/clients`)
+      .where("phone", "==", clientPhone)
+      .limit(1)
+      .get();
+
+    if (!clientMatch.empty) {
+      resolvedClientId = clientMatch.docs[0].id;
+    } else {
+      const newClientRef = db.collection(`tenants/${tenantId}/clients`).doc();
+      await newClientRef.set({
+        tenantId,
+        name: clientName,
+        phone: clientPhone,
+        email: clientEmail || "",
+        status: "active",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        origin: "public_booking"
+      });
+      resolvedClientId = newClientRef.id;
+    }
+
+    const requestHash = sha256(JSON.stringify({
+      tenantId, professionalId, serviceId, startMs, clientPhone, idempotencyKey
+    }));
+    const idempotencyRef = db.doc(`tenants/${tenantId}/idempotencyKeys/${sha256(idempotencyKey)}`);
+    const serviceRef = db.doc(`tenants/${tenantId}/services/${serviceId}`);
+    const appointmentRef = db.collection(`tenants/${tenantId}/appointments`).doc();
+    const auditRef = db.collection(`tenants/${tenantId}/auditLog`).doc();
+
+    return db.runTransaction(async (tx) => {
+      let chosenProfessionalId = professionalId;
+      if (!chosenProfessionalId) {
+        // Find any active professional
+        const allPros = await tx.get(db.collection(`tenants/${tenantId}/professionals`).where("status", "==", "active").limit(1));
+        if (allPros.empty) throw new HttpsError("failed-precondition", "Nenhum profissional disponível.");
+        chosenProfessionalId = allPros.docs[0].id;
+      }
+
+      const professionalRef = db.doc(`tenants/${tenantId}/professionals/${chosenProfessionalId}`);
+      const [tenantSnap, serviceSnap, professionalSnap, idemSnap] = await Promise.all([
+        tx.get(tenantRef), tx.get(serviceRef), tx.get(professionalRef), tx.get(idempotencyRef)
+      ]);
+
+      if (!tenantSnap.exists || tenantSnap.data()?.status !== "active") {
+        throw new HttpsError("failed-precondition", "Empresa não disponível.");
+      }
+      if (!serviceSnap.exists || serviceSnap.data()?.status !== "active") {
+        throw new HttpsError("failed-precondition", "Serviço não disponível.");
+      }
+      if (!professionalSnap.exists || professionalSnap.data()?.status !== "active") {
+        throw new HttpsError("failed-precondition", "Profissional não disponível.");
+      }
+
+      if (idemSnap.exists) {
+        return { ok: true, appointmentId: idemSnap.data()?.appointmentId, replayed: true };
+      }
+
+      const tenant = tenantSnap.data()!;
+      const service = serviceSnap.data()!;
+      const durationMinutes = Number(service.durationMinutes) || 30;
+      const priceMinor = Number(service.priceMinor) || 0;
+      const currency = cleanText(service.currency || tenant.currency || "BRL", 3);
+      const timezone = cleanText(tenant.timezone || "America/Sao_Paulo", 80);
+
+      const endMs = startMs + durationMinutes * 60_000;
+      const startAt = new Date(startMs);
+      const endAt = new Date(endMs);
+      const localStart = localDateParts(startAt, timezone);
+      const localEnd = localDateParts(new Date(endMs - 1), timezone);
+      const localEndMinute = localEnd.minute + 1;
+
+      if (localStart.date !== localEnd.date) {
+        throw new HttpsError("invalid-argument", "O agendamento não pode cruzar a meia-noite local.");
+      }
+
+      const dayMs = 86_400_000;
+      const firstDay = Math.floor(startMs / dayMs);
+      const lastDay = Math.floor((endMs - 1) / dayMs);
+      const guardRefs = [];
+      for (let day = firstDay; day <= lastDay; day++) {
+        guardRefs.push(db.doc(`tenants/${tenantId}/bookingGuards/${sha256(chosenProfessionalId).slice(0, 24)}_${day}`));
+      }
+      await Promise.all(guardRefs.map((ref) => tx.get(ref)));
+
+      const companyScheduleRef = db.doc(`tenants/${tenantId}/scheduleSettings/company`);
+      const professionalScheduleRef = db.doc(`tenants/${tenantId}/scheduleSettings/professional_${chosenProfessionalId}`);
+      const companyExceptionRef = db.doc(`tenants/${tenantId}/scheduleExceptions/${localStart.date}`);
+      const professionalExceptionRef = db.doc(`tenants/${tenantId}/professionalExceptions/${chosenProfessionalId}_${localStart.date}`);
+      const blocksQuery = db.collection(`tenants/${tenantId}/blocks`).where("date", "==", localStart.date);
+
+      const [companySchedSnap, proSchedSnap, companyExceptionSnap, proExceptionSnap, blocksSnap] =
+        await Promise.all([
+          tx.get(companyScheduleRef), tx.get(professionalScheduleRef),
+          tx.get(companyExceptionRef), tx.get(professionalExceptionRef),
+          tx.get(blocksQuery)
+        ]);
+
+      if (companyExceptionSnap.exists || proExceptionSnap.exists) {
+        throw new HttpsError("failed-precondition", "A empresa ou profissional está fechado nesta data.");
+      }
+
+      const defaultCompanyDays: Record<string, unknown> = {
+        0: [],
+        1: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+        2: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+        3: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+        4: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+        5: [{ start: "09:00", end: "18:00", breaks: [{ start: "12:00", end: "13:00" }] }],
+        6: [{ start: "09:00", end: "14:00", breaks: [] }]
+      };
+      const companyPeriods = ((companySchedSnap.exists && companySchedSnap.data()?.days) || defaultCompanyDays)[String(localStart.weekday)];
+      const proPeriods = (proSchedSnap.exists && proSchedSnap.data()?.days?.[String(localStart.weekday)]) || companyPeriods;
+
+      if (!scheduleCovers(companyPeriods, localStart.minute, localEndMinute) ||
+          !scheduleCovers(proPeriods, localStart.minute, localEndMinute)) {
+        throw new HttpsError("failed-precondition", "Horário fora do funcionamento ou durante intervalo.");
+      }
+
+      const blocked = blocksSnap.docs.some((doc) => {
+        const b = doc.data();
+        if (b.professionalId && b.professionalId !== chosenProfessionalId) return false;
+        const bs = clockMinutes(b.start);
+        const be = clockMinutes(b.end);
+        return bs !== null && be !== null && bs < be && localStart.minute < be && bs < localEndMinute;
+      });
+      if (blocked) {
+        throw new HttpsError("already-exists", "Este horário está bloqueado.");
+      }
+
+      const overlapsQuery = db.collection(`tenants/${tenantId}/appointments`)
+        .where("professionalId", "==", chosenProfessionalId)
+        .where("startAt", "<", new Date(endMs))
+        .where("startAt", ">=", new Date(startMs - MAX_SERVICE_MINUTES * 60_000));
+
+      const overlapSnap = await tx.get(overlapsQuery);
+      const hasConflict = overlapSnap.docs.some((doc) => {
+        const d = doc.data();
+        const aStart = d.startAt?.toMillis?.();
+        const aEnd = d.endAt?.toMillis?.();
+        return ["confirmed", "booked", "pending"].includes(d.status) &&
+          Number.isFinite(aStart) && Number.isFinite(aEnd) &&
+          startMs < aEnd && aStart < endMs;
+      });
+      if (hasConflict) {
+        throw new HttpsError("already-exists", "Este profissional já possui um agendamento neste horário.");
+      }
+
+      const now = FieldValue.serverTimestamp();
+      tx.create(appointmentRef, {
+        tenantId,
+        professionalId: chosenProfessionalId,
+        serviceId,
+        clientId: resolvedClientId,
+        clientName,
+        clientPhone,
+        clientEmail: clientEmail || null,
+        startAt,
+        endAt,
+        status: "confirmed",
+        origin: "public_online",
+        priceMinor,
+        currency,
+        notes,
+        createdAt: now,
+        updatedAt: now
+      });
+
+      tx.create(idempotencyRef, {
+        requestHash,
+        appointmentId: appointmentRef.id,
+        createdAt: now
+      });
+
+      tx.create(auditRef, {
+        tenantId,
+        actorUid: "public",
+        action: "appointment.created_public",
+        resourceType: "appointment",
+        resourceId: appointmentRef.id,
+        createdAt: now
+      });
+
+      return { ok: true, appointmentId: appointmentRef.id, replayed: false };
+    });
   }
 );

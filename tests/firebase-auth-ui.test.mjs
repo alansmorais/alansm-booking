@@ -67,3 +67,34 @@ test("Firebase clients screen uses tenant-scoped private client APIs", async () 
   assert.match(app, /data-action="deactivate-client"/);
   assert.match(app, /Dados de contacto privados da empresa/);
 });
+
+test("Firebase schedule settings screen exposes company, pro schedules and closures", async () => {
+  const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(app, /id="firebaseCompanyScheduleForm"/);
+  assert.match(app, /id="firebaseProfessionalScheduleForm"/);
+  assert.match(app, /id="firebaseCompanyExceptionForm"/);
+  assert.match(app, /id="firebaseProExceptionForm"/);
+  assert.match(app, /id="firebaseBlockForm"/);
+  assert.match(app, /firebaseWorkspaceAdapter\.saveScheduleSettings/);
+  assert.match(app, /firebaseWorkspaceAdapter\.saveScheduleException/);
+  assert.match(app, /firebaseWorkspaceAdapter\.saveScheduleBlock/);
+});
+
+test("Firebase appointment actions support status updates and cancellation", async () => {
+  const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(app, /data-action="update-appointment-status"/);
+  assert.match(app, /data-action="cancel-firebase-appointment"/);
+  assert.match(app, /firebaseWorkspaceAdapter\.updateAppointmentStatus/);
+  assert.match(app, /firebaseWorkspaceAdapter\.cancelAppointment/);
+  assert.match(app, /data-action="new-firebase-appointment"/);
+});
+
+test("Public customer booking flow initializes when slug query parameter is present", async () => {
+  const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(app, /initPublicCustomerBooking/);
+  assert.match(app, /id="publicBookingForm"/);
+  assert.match(app, /adapter\.getPublicBookingPage/);
+  assert.match(app, /adapter\.getPublicAvailability/);
+  assert.match(app, /adapter\.createPublicAppointment/);
+});
+

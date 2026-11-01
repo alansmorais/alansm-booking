@@ -413,7 +413,9 @@ test("createAppointment enforces idempotency and prevents overlapping concurrent
     })
   ]);
 
-  const startAtMs = Math.ceil((Date.now() + 48 * 60 * 60 * 1000) / 300000) * 300000;
+  const futureDay = new Date(Date.now() + 48 * 60 * 60 * 1000);
+  const futureDayIso = futureDay.toISOString().slice(0, 10);
+  const startAtMs = new Date(`${futureDayIso}T08:00:00.000Z`).getTime();
   const payload = {
     tenantId, professionalId, serviceId, clientId, startAtMs,
     notes: "Teste de idempotência", idempotencyKey: `booking-idem-${Date.now()}`
@@ -667,3 +669,161 @@ test("staff cannot change company hours, schedule exceptions or time blocks", as
   }, signin.data.idToken);
   assert.equal(block.data.error?.status, "PERMISSION_DENIED", JSON.stringify(block.data));
 });
+
+test("getScheduleSettings returns company schedule, exceptions and blocks for tenant reader", async () => {
+  const result = await callable("getScheduleSettings", { tenantId });
+  assert.equal(result.data.result?.ok, true, JSON.stringify(result.data));
+  assert.ok(result.data.result.companySchedule);
+  assert.ok(Array.isArray(result.data.result.exceptions));
+  assert.ok(Array.isArray(result.data.result.professionalExceptions));
+  assert.ok(Array.isArray(result.data.result.blocks));
+});
+
+test("updateAppointmentStatus transitions active appointment and prevents invalid updates", async () => {
+  const appointmentId = `status-test-${Date.now()}`;
+  const apptRef = adminDb.doc(`tenants/${tenantId}/appointments/${appointmentId}`);
+  await apptRef.set({
+    tenantId, status: "confirmed",
+    startAt: new Date(Date.now() + 6 * 86400000),
+    endAt: new Date(Date.now() + 6 * 86400000 + 3600000)
+  });
+
+  const completed = await callable("updateAppointmentStatus", {
+    tenantId, appointmentId, status: "completed"
+  });
+  assert.equal(completed.data.result?.ok, true, JSON.stringify(completed.data));
+  assert.equal(completed.data.result.status, "completed");
+
+  const stored = await apptRef.get();
+  assert.equal(stored.data()?.status, "completed");
+
+  // Rejects invalid status
+  const invalid = await callable("updateAppointmentStatus", {
+    tenantId, appointmentId, status: "invalid_status"
+  });
+  assert.equal(invalid.data.error?.status, "INVALID_ARGUMENT", JSON.stringify(invalid.data));
+
+  // Rejects cancelled appointment transition
+  await apptRef.update({ status: "cancelled" });
+  const cancelledTransition = await callable("updateAppointmentStatus", {
+    tenantId, appointmentId, status: "completed"
+  });
+  assert.equal(cancelledTransition.data.error?.status, "FAILED_PRECONDITION", JSON.stringify(cancelledTransition.data));
+});
+
+test("getPublicBookingPage and getPublicAvailability expose public data without auth", async () => {
+  const publicSlug = `public-slug-${Date.now()}`;
+  const pubTenant = await callable("createTenant", {
+    name: "Barbearia Pública",
+    slug: publicSlug,
+    timezone: "Europe/Warsaw",
+    currency: "PLN"
+  });
+  assert.equal(pubTenant.data.result?.ok, true, JSON.stringify(pubTenant.data));
+  const pubTenantId = pubTenant.data.result.tenant.tenantId;
+
+  // Add active professional and service
+  const pro = await callable("saveCatalogItem", {
+    tenantId: pubTenantId, kind: "professional", name: "Carlos Barbeiro", color: "#225588"
+  });
+  assert.equal(pro.data.result?.ok, true, JSON.stringify(pro.data));
+
+  const svc = await callable("saveCatalogItem", {
+    tenantId: pubTenantId, kind: "service", name: "Corte Tradicional",
+    durationMinutes: 30, priceMinor: 5000, currency: "PLN"
+  });
+  assert.equal(svc.data.result?.ok, true, JSON.stringify(svc.data));
+
+  // Public booking page lookup
+  const pageResult = await callable("getPublicBookingPage", { slug: publicSlug }, null);
+  assert.equal(pageResult.data.result?.ok, true, JSON.stringify(pageResult.data));
+  assert.equal(pageResult.data.result.tenant.slug, publicSlug);
+  assert.equal(pageResult.data.result.professionals.length, 1);
+  assert.equal(pageResult.data.result.services.length, 1);
+
+  // Nonexistent slug
+  const notFound = await callable("getPublicBookingPage", { slug: "slug-nao-existente" }, null);
+  assert.equal(notFound.data.error?.status, "NOT_FOUND", JSON.stringify(notFound.data));
+
+  // Public availability lookup for tomorrow
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const availResult = await callable("getPublicAvailability", {
+    slug: publicSlug,
+    serviceId: svc.data.result.itemId,
+    date: tomorrow
+  }, null);
+  assert.equal(availResult.data.result?.ok, true, JSON.stringify(availResult.data));
+  assert.ok(Array.isArray(availResult.data.result.slots));
+});
+
+test("createPublicAppointment books appointment, upserts client and prevents conflicts", async () => {
+  const publicSlug = `booking-test-${Date.now()}`;
+  const pubTenant = await callable("createTenant", {
+    name: "Salão Agendamento",
+    slug: publicSlug,
+    timezone: "Europe/Warsaw",
+    currency: "PLN"
+  });
+  assert.equal(pubTenant.data.result?.ok, true, JSON.stringify(pubTenant.data));
+  const pubTenantId = pubTenant.data.result.tenant.tenantId;
+
+  const pro = await callable("saveCatalogItem", {
+    tenantId: pubTenantId, kind: "professional", name: "Lucas Barbeiro", color: "#114477"
+  });
+  const proId = pro.data.result.itemId;
+
+  const svc = await callable("saveCatalogItem", {
+    tenantId: pubTenantId, kind: "service", name: "Barba Terapia",
+    durationMinutes: 30, priceMinor: 4000, currency: "PLN"
+  });
+  const svcId = svc.data.result.itemId;
+
+  // Choose a weekday daytime slot 48h ahead
+  const targetDay = new Date(Date.now() + 48 * 3600 * 1000);
+  targetDay.setUTCHours(10, 0, 0, 0);
+  const startAtMs = targetDay.getTime();
+
+  const idempotencyKey = `pub-key-${Date.now()}`;
+  const booking = await callable("createPublicAppointment", {
+    slug: publicSlug,
+    serviceId: svcId,
+    professionalId: proId,
+    startAtMs,
+    clientName: "Cliente Online",
+    clientPhone: "+5511999998888",
+    clientEmail: "cliente@exemplo.com",
+    notes: "Primeira visita",
+    idempotencyKey
+  }, null);
+
+  assert.equal(booking.data.result?.ok, true, JSON.stringify(booking.data));
+  assert.ok(booking.data.result.appointmentId);
+  assert.equal(booking.data.result.replayed, false);
+
+  // Idempotency replay
+  const replay = await callable("createPublicAppointment", {
+    slug: publicSlug,
+    serviceId: svcId,
+    professionalId: proId,
+    startAtMs,
+    clientName: "Cliente Online",
+    clientPhone: "+5511999998888",
+    idempotencyKey
+  }, null);
+  assert.equal(replay.data.result?.ok, true, JSON.stringify(replay.data));
+  assert.equal(replay.data.result.appointmentId, booking.data.result.appointmentId);
+  assert.equal(replay.data.result.replayed, true);
+
+  // Conflicting booking at the same time is rejected
+  const conflict = await callable("createPublicAppointment", {
+    slug: publicSlug,
+    serviceId: svcId,
+    professionalId: proId,
+    startAtMs,
+    clientName: "Outro Cliente",
+    clientPhone: "+5511888887777",
+    idempotencyKey: `other-key-${Date.now()}`
+  }, null);
+  assert.equal(conflict.data.error?.status, "ALREADY_EXISTS", JSON.stringify(conflict.data));
+});
+
