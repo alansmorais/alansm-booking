@@ -21,7 +21,8 @@ test("Firebase SDK initialization connects Auth, Firestore and Functions to loca
 });
 
 test("the app includes the bootstrap as a module without changing the default demo adapters", () => {
-  assert.match(html, /<script type="module" src="\.\/firebase-init\.js"><\/script>/);
+  assert.match(html, /<script src="\.\/firebase-init\.js"><\/script>/);
+  assert.doesNotMatch(html, /<script type="module" src="\.\/firebase-init\.js">/);
   assert.match(html, /<script src="\.\/auth-adapter\.js"><\/script>/);
   assert.match(html, /<script src="\.\/workspace-adapter\.js"><\/script>/);
 });
