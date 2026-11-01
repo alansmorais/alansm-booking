@@ -132,7 +132,7 @@ function renderFirebaseView(){
     '<span class="status">'+escapeHTML(statusLabel[a.status]||a.status)+'</span>'
    ]);
    const tableHtml=(headers,rows)=>'<div class="panel table-wrap"><table class="data-table"><thead><tr>'+headers.map(h=>"<th>"+h+"</th>").join("")+'</tr></thead><tbody>'+(rows.length?rows.map(r=>"<tr>"+r.map(c=>"<td>"+c+"</td>").join("")+"</tr>").join(""):'<tr><td colspan="'+headers.length+'" class="empty-state">Nenhum registo encontrado.</td></tr>')+'</tbody></table></div>';
-   const demoNotice='<div class="demo-banner">Dados carregados do Firebase Emulator. Esta integração é apenas local; nenhum projeto de produção está configurado.</div>';
+   const demoNotice='<div class="demo-banner">Dados carregados do Firebase Emulator. Nenhum dado fictício será exibido aqui. Esta integração é apenas local; nenhum projeto de produção está configurado.</div>';
    let body="";
    if(state.view==="overview"){
     body=heading("Visão geral","Resumo dos dados reais desta empresa.")+
