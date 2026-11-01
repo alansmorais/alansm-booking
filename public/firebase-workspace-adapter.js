@@ -129,7 +129,7 @@
         const normalizedNotes = String(notes || "").trim();
         if (!["active", "inactive"].includes(status)) throw new Error("Estado do cliente inválido.");
         if (status === "active" && normalizedName.length < 2) throw new Error("Informe o nome do cliente.");
-        if (normalizedEmail && !/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(normalizedEmail)) throw new Error("Informe um e-mail válido.");
+        if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) throw new Error("Informe um e-mail válido.");
         if (normalizedPhone && !/^[+0-9() .-]{7,30}$/.test(normalizedPhone)) throw new Error("Informe um telefone válido.");
         return invoke("saveTenantClient", {
           tenantId: id, ...(clientId ? { clientId: String(clientId) } : {}),
