@@ -6,36 +6,42 @@ const source = await readFile(new URL("../public/firebase-init.js", import.meta.
 const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
 
 test("Firebase bootstrap preserves the existing ASMAutomatedServices web configuration", () => {
-  assert.match(source, /apiKey: "AIzaSyB9fEcMN6Ve5r8GLqu5yilBYSAB7trmVYM"/);
-  assert.match(source, /authDomain: "gen-lang-client-0623364466\\.firebaseapp\\.com"/);
-  assert.match(source, /projectId: "gen-lang-client-0623364466"/);
-  assert.match(source, /storageBucket: "gen-lang-client-0623364466\\.firebasestorage\\.app"/);
-  assert.match(source, /messagingSenderId: "25048197899"/);
-  assert.match(source, /appId: "1:25048197899:web:97f4bffee21d82bbdf100e"/);
-  assert.match(source, /measurementId: "G-473CVXCTZ1"/);
+  for (const value of [
+    'apiKey: "AIzaSyB9fEcMN6Ve5r8GLqu5yilBYSAB7trmVYM"',
+    'authDomain: "gen-lang-client-0623364466.firebaseapp.com"',
+    'projectId: "gen-lang-client-0623364466"',
+    'storageBucket: "gen-lang-client-0623364466.firebasestorage.app"',
+    'messagingSenderId: "25048197899"',
+    'appId: "1:25048197899:web:97f4bffee21d82bbdf100e"',
+    'measurementId: "G-473CVXCTZ1"'
+  ]) assert.ok(source.includes(value), `Missing Firebase config value: ${value}`);
 });
 
 test("Firebase bootstrap initializes Auth, Firestore and Cloud Functions", () => {
-  assert.match(source, /firebase-auth\\.js/);
-  assert.match(source, /firebase-firestore\\.js/);
-  assert.match(source, /firebase-functions\\.js/);
-  assert.match(source, /getAuth\\(app\\)/);
-  assert.match(source, /getFirestore\\(app\\)/);
-  assert.match(source, /getFunctions\\(app, "us-central1"\\)/);
+  for (const value of [
+    "firebase-auth.js",
+    "firebase-firestore.js",
+    "firebase-functions.js",
+    "getAuth(app)",
+    "getFirestore(app)",
+    'getFunctions(app, "us-central1")'
+  ]) assert.ok(source.includes(value), `Missing Firebase SDK setup: ${value}`);
 });
 
 test("emulators can only be enabled explicitly on local development hosts", () => {
-  assert.match(source, /params\\.get\\("firebaseEmulator"\\) === "1"/);
-  assert.match(source, /new Set\\(\\["localhost", "127\\.0\\.0\\.1", "::1"\\]\\)/);
-  assert.match(source, /allowedEmulatorHosts\\.has\\(window\\.location\\.hostname\\)/);
-  assert.match(source, /connectAuthEmulator\\(auth, "http:\\/\\/127\\.0\\.0\\.1:9099"/);
-  assert.match(source, /connectFirestoreEmulator\\(db, "127\\.0\\.0\\.1", 8080\\)/);
-  assert.match(source, /connectFunctionsEmulator\\(functions, "127\\.0\\.0\\.1", 5001\\)/);
+  for (const value of [
+    'params.get("firebaseEmulator") === "1"',
+    'new Set(["localhost", "127.0.0.1", "::1"])',
+    'allowedEmulatorHosts.has(window.location.hostname)',
+    'connectAuthEmulator(auth, "http://127.0.0.1:9099"',
+    'connectFirestoreEmulator(db, "127.0.0.1", 8080)',
+    'connectFunctionsEmulator(functions, "127.0.0.1", 5001)'
+  ]) assert.ok(source.includes(value), `Missing emulator guard: ${value}`);
 });
 
 test("the app loads the Firebase bootstrap before its authentication UI", () => {
-  assert.match(html, /<script src="\\.\\/firebase-init\\.js"><\\/script>/);
-  assert.match(html, /<script src="\\.\\/firebase-auth-adapter\\.js"><\\/script>/);
-  assert.match(html, /<script src="\\.\\/firebase-workspace-adapter\\.js"><\\/script>/);
+  assert.ok(html.includes('<script src="./firebase-init.js"></script>'));
+  assert.ok(html.includes('<script src="./firebase-auth-adapter.js"></script>'));
+  assert.ok(html.includes('<script src="./firebase-workspace-adapter.js"></script>'));
   assert.ok(html.indexOf("firebase-init.js") < html.indexOf("auth.js"));
 });
