@@ -141,7 +141,9 @@ function renderFirebaseView(){
      ];
    });
    const tableHtml=(headers,rows)=>'<div class="panel table-wrap"><table class="data-table"><thead><tr>'+headers.map(h=>"<th>"+h+"</th>").join("")+'</tr></thead><tbody>'+(rows.length?rows.map(r=>"<tr>"+r.map(c=>"<td>"+c+"</td>").join("")+"</tr>").join(""):'<tr><td colspan="'+headers.length+'" class="empty-state">Nenhum registo encontrado.</td></tr>')+'</tbody></table></div>';
-   const firebaseModeLabel=window.BookingFirebaseRuntime?.mode==="firebase-emulator"?"Firebase Emulator":"Firebase";\n   const firebaseModeDescription=window.BookingFirebaseRuntime?.mode==="firebase-emulator"?"Esta integração utiliza emuladores locais.":"Esta integração utiliza o projeto Firebase configurado.";\n   const demoNotice='<div class="demo-banner">Dados carregados do '+firebaseModeLabel+'. Nenhum dado fictício será exibido aqui. '+firebaseModeDescription+'</div>';
+   const firebaseModeLabel=window.BookingFirebaseRuntime?.mode==="firebase-emulator"?"Firebase Emulator":"Firebase";
+   const firebaseModeDescription=window.BookingFirebaseRuntime?.mode==="firebase-emulator"?"Esta integração utiliza emuladores locais.":"Esta integração utiliza o projeto Firebase configurado.";
+   const demoNotice='<div class="demo-banner">Dados carregados do '+firebaseModeLabel+'. Nenhum dado fictício será exibido aqui. '+firebaseModeDescription+'</div>';
    let body="";
    if(state.view==="overview"){
     body=heading("Visão geral","Resumo dos dados reais desta empresa.",'<button class="primary-btn" data-action="new-firebase-appointment">＋ Novo agendamento</button>')+
