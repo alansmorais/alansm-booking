@@ -141,7 +141,7 @@ function renderFirebaseView(){
      ];
    });
    const tableHtml=(headers,rows)=>'<div class="panel table-wrap"><table class="data-table"><thead><tr>'+headers.map(h=>"<th>"+h+"</th>").join("")+'</tr></thead><tbody>'+(rows.length?rows.map(r=>"<tr>"+r.map(c=>"<td>"+c+"</td>").join("")+"</tr>").join(""):'<tr><td colspan="'+headers.length+'" class="empty-state">Nenhum registo encontrado.</td></tr>')+'</tbody></table></div>';
-   const demoNotice='<div class="demo-banner">Dados carregados do Firebase Emulator. Nenhum dado fictício será exibido aqui. Esta integração é apenas local; nenhum projeto de produção está configurado.</div>';
+   const firebaseModeLabel=window.BookingFirebaseRuntime?.mode==="firebase-emulator"?"Firebase Emulator":"Firebase";\n   const firebaseModeDescription=window.BookingFirebaseRuntime?.mode==="firebase-emulator"?"Esta integração utiliza emuladores locais.":"Esta integração utiliza o projeto Firebase configurado.";\n   const demoNotice='<div class="demo-banner">Dados carregados do '+firebaseModeLabel+'. Nenhum dado fictício será exibido aqui. '+firebaseModeDescription+'</div>';
    let body="";
    if(state.view==="overview"){
     body=heading("Visão geral","Resumo dos dados reais desta empresa.",'<button class="primary-btn" data-action="new-firebase-appointment">＋ Novo agendamento</button>')+
@@ -332,7 +332,7 @@ window.BookingApp=Object.freeze({
   if(selected&&window.BookingTeam?.configureLive){
    window.BookingTeam.configureLive({workspaceAdapter:adapter,tenantId:selected});
   }
-  document.querySelector(".demo-pill").textContent="FIREBASE EMULATOR";
+  document.querySelector(".demo-pill").textContent=window.BookingFirebaseRuntime?.mode==="firebase-emulator"?"FIREBASE EMULATOR":"FIREBASE CONECTADO";
   const profile=document.querySelector(".profile");if(profile){profile.querySelector("strong").textContent=session.user?.displayName||session.user?.email||"Utilizador";profile.querySelector("small").textContent="Conta autenticada";}
   state.view="overview";state.query="";render();
  },
