@@ -2,7 +2,7 @@
   "use strict";
 
   function createFirebaseWorkspaceAdapter({ functions = null, httpsCallable = null, authAdapter, apiBaseUrl = "" } = {}) {
-    const workerBase = String(apiBaseUrl || window.BOOKING_API_BASE_URL || "").trim().replace(/\\/$/, "");
+    const workerBase = String(apiBaseUrl || window.BOOKING_API_BASE_URL || "").trim().replace(/\/$/, "");
     const useWorker = Boolean(workerBase);
     if (!authAdapter || authAdapter.mode !== "firebase" ||
         (!useWorker && (!functions || typeof httpsCallable !== "function"))) {
