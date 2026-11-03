@@ -48,7 +48,7 @@ test("tenant onboarding rejects reserved slugs", async () => {
 
 test("tenant onboarding rejects invalid timezones and currencies", async () => {
   await assert.rejects(
-    createTenant({ sub: "test-user" }, { name: "Empresa válida", slug: "empresa-valida", timezone: "Not/A_Timezone" }, {}),
+    createTenant({ sub: "test-user" }, { name: "Empresa válida", slug: "empresa-valida", timezone: "Mars/Olympus_Mons" }, {}),
     (error) => error.code === "invalid-argument"
   );
   await assert.rejects(
