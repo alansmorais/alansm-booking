@@ -1,15 +1,35 @@
 (() => {
   "use strict";
 
-  function createFirebaseWorkspaceAdapter({ functions, httpsCallable, authAdapter } = {}) {
-    if (!functions || typeof httpsCallable !== "function" ||
-        !authAdapter || authAdapter.mode !== "firebase") {
-      throw new TypeError("Firebase Functions e autenticação válida são obrigatórios.");
+  function createFirebaseWorkspaceAdapter({ functions = null, httpsCallable = null, authAdapter, apiBaseUrl = "" } = {}) {
+    const workerBase = String(apiBaseUrl || window.BOOKING_API_BASE_URL || "").trim().replace(/\\/$/, "");
+    const useWorker = Boolean(workerBase);
+    if (!authAdapter || authAdapter.mode !== "firebase" ||
+        (!useWorker && (!functions || typeof httpsCallable !== "function"))) {
+      throw new TypeError("Configure o Worker API e a autenticação Firebase.");
     }
 
     let selectedTenantId = null;
 
     async function invoke(name, payload = {}) {
+      if (useWorker) {
+        const publicOperations = new Set(["getPublicBookingPage", "getPublicAvailability", "createPublicAppointment"]);
+        const headers = { "content-type": "application/json" };
+        if (!publicOperations.has(name)) {
+          const user = authAdapter.getCurrentUser();
+          if (!user || typeof user.getIdToken !== "function") throw new Error("Faça login para continuar.");
+          headers.Authorization = "Bearer " + await user.getIdToken();
+        }
+        const response = await fetch(workerBase + "/api/" + encodeURIComponent(name), {
+          method: "POST", headers, body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const error = new Error(data?.error?.message || "Não foi possível concluir a operação.");
+          error.code = data?.error?.code || "internal"; error.status = response.status; throw error;
+        }
+        return data;
+      }
       const call = httpsCallable(functions, name);
       const response = await call(payload);
       return response.data;
@@ -56,7 +76,7 @@
     }
 
     return Object.freeze({
-      mode: "firebase",
+      mode: useWorker ? "worker" : "firebase",
       async getSession() {
         return getSession();
       },
