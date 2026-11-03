@@ -1,6 +1,7 @@
 import { createTenant, getSession } from "./onboarding.js";
 import { createAppointment } from "./appointments.js";
 import { cancelAppointment } from "./cancellations.js";
+import { saveScheduleSettings, saveScheduleException, saveScheduleBlock, getScheduleSettings } from "./schedules.js";
 const PROJECT_ID = "gen-lang-client-0623364466";
 const FIREBASE_ISSUER = `https://securetoken.google.com/${PROJECT_ID}`;
 const FIREBASE_JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
@@ -166,6 +167,10 @@ export default {
           ...env,
           getGoogleAccessToken: () => getGoogleAccessToken(env)
         });
+        else if (url.pathname === "/api/saveScheduleSettings") result = await saveScheduleSettings(authClaims, body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
+        else if (url.pathname === "/api/saveScheduleException") result = await saveScheduleException(authClaims, body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
+        else if (url.pathname === "/api/saveScheduleBlock") result = await saveScheduleBlock(authClaims, body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
+        else if (url.pathname === "/api/getScheduleSettings") result = await getScheduleSettings(authClaims, body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
         else return json({ error: { code: "not-implemented", message: "Esta operação ainda está em migração. Nenhum dado foi alterado." } }, 501, cors);
         return json(result, 200, cors);
       } catch (error) {
