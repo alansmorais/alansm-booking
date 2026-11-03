@@ -157,6 +157,23 @@ export default {
         return json({ error: { code, message: status >= 500 ? "Não foi possível concluir a consulta. Tente novamente." : error.message } }, status, cors);
       }
     }
+    if (["/api/getPublicBookingPage", "/api/getPublicAvailability", "/api/createPublicAppointment"].includes(url.pathname)) {
+      if (request.method !== "POST") return json({ error: { code: "method-not-allowed", message: "Método não permitido." } }, 405, cors);
+      try {
+        const body = await request.json().catch(() => ({}));
+        const apiEnv = { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) };
+        const result = url.pathname === "/api/getPublicBookingPage"
+          ? await getPublicBookingPage(body, apiEnv)
+          : url.pathname === "/api/getPublicAvailability"
+            ? await getPublicAvailability(body, apiEnv)
+            : await createPublicAppointment(body, apiEnv);
+        return json(result, 200, cors);
+      } catch (error) {
+        const code = error.code || "internal";
+        const status = error.status || (code === "not-found" ? 404 : code === "failed-precondition" ? 412 : code === "invalid-argument" ? 400 : code === "already-exists" ? 409 : code === "resource-exhausted" ? 429 : 500);
+        return json({ error: { code, message: status >= 500 ? "Não foi possível concluir a consulta. Tente novamente." : error.message } }, status, cors);
+      }
+    }
     if (url.pathname.startsWith("/api/")) {
       try {
         const authorization = request.headers.get("Authorization") || "";
