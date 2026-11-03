@@ -13,9 +13,13 @@ This is the separate backend planned for the Preview environment. It does not al
 - Migrated operations:
   - `POST /api/createTenant`: validates onboarding data and atomically creates the tenant, slug reservation, and owner membership.
   - `POST /api/getSession`: returns the authenticated user's active memberships and active tenant summaries.
+  - `POST /api/saveScheduleSettings`: saves weekly company or professional hours.
+  - `POST /api/saveScheduleException`: records company closures or professional absences (up to 90 days).
+  - `POST /api/saveScheduleBlock`: creates, updates or removes time blocks.
+  - `POST /api/getScheduleSettings`: reads schedule hours, exceptions and blocks for authorized tenant members.
 - Other business API routes still return HTTP 501 until migrated.
 
-**Do not connect the website to this Worker yet.** These two operations have unit-level validation coverage, but have not been tested end-to-end against a deployed Worker and the live Firestore project. The remaining 19 callable operations still need to be ported with their authorization, validation, data shaping, and Firestore transaction semantics.
+**Do not connect the website to this Worker yet.** These two operations have unit-level validation coverage, but have not been tested end-to-end against a deployed Worker and the live Firestore project. The remaining 15 callable operations still need to be ported with their authorization, validation, data shaping, and Firestore transaction semantics.
 
 ## Required Cloudflare configuration (not configured yet)
 
