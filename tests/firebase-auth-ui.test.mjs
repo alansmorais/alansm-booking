@@ -39,7 +39,7 @@ test("dashboard switches to tenant-scoped Firebase data after authentication", a
   assert.match(app, /firebaseWorkspaceAdapter\.getAgenda/);
   assert.match(app, /firebaseMode\)\{renderFirebaseView\(\);return;/);
   assert.match(app, /Nenhum dado fictício será exibido aqui/);
-  assert.match(app, /Dados carregados do '+firebaseModeLabel/);
+  assert.match(app, /Dados carregados do '\+firebaseModeLabel/);
 });
 
 test("Firebase dashboard reads no more than the backend 31-day appointment window", async () => {
@@ -97,4 +97,3 @@ test("Public customer booking flow initializes when slug query parameter is pres
   assert.match(app, /adapter\.getPublicAvailability/);
   assert.match(app, /adapter\.createPublicAppointment/);
 });
-
