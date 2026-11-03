@@ -80,6 +80,20 @@ O frontend foi projetado com arquitetura dual-mode fail-safe:
 
 ---
 
+## Comando único de validação do Preview
+
+Depois de clonar o repositório e instalar Node.js (20+) e Java 21, execute na raiz:
+
+```bash
+npm run preview:check
+```
+
+Esse comando instala as dependências da raiz e das Firebase Functions e executa, em sequência, os testes dos adaptadores, autenticação, onboarding, convites, equipe, verificações de sintaxe do Worker, testes unitários do Worker e compilação das Functions. Ele para no primeiro erro e **não publica nem altera qualquer ambiente**.
+
+A validação das regras Firestore e os testes de integração que dependem dos emuladores continuam disponíveis no workflow do GitHub Actions. O comando único não configura credenciais privadas, não implanta o Worker e não faz deploy em produção.
+
+---
+
 ## 5. Testes Automatizados
 
 O repositório conta com uma suíte abrangente de testes automatizados com cobertura ponta a ponta:
