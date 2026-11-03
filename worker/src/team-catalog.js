@@ -27,8 +27,6 @@ export async function createMemberInvitation(claims,input,env){
  const tenantId=clean(input?.tenantId,128),email=clean(input?.email,254).toLowerCase(),role=clean(input?.role,20);
  if(!validId(tenantId)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!["admin","staff"].includes(role))throw fail("invalid-argument","E-mail, empresa ou função inválidos.");
  await verifyUser(claims,env);
- const identity=await fetch("https://identitytoolkit.googleapis.com/v1/accounts:lookup?key="+encodeURIComponent(env.FIREBASE_WEB_API_KEY),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({idToken:claims.__idToken})}).then(r=>r.json());
- const currentEmail=identity.users?.[0]?.email;
  return withTx(env,async tx=>{
   const {member}=await manager(tx,claims.sub,tenantId);
   if(member.role!=="owner"&&role==="admin")throw fail("permission-denied","Apenas o proprietário pode convidar outro administrador.",403);
