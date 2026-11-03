@@ -76,7 +76,8 @@ export async function createPublicAppointment(input,env){
   const tenant=f(tenantSnap),service=f(serviceSnap);
   if(!tenantSnap.exists||tenant.status!=="active")throw fail("failed-precondition","Empresa não disponível.",412);
   if(!serviceSnap.exists||service.status!=="active")throw fail("failed-precondition","Serviço não disponível.",412);
-  if(idemSnap.exists){const saved=f(idemSnap);await tx.rollback();return{ok:true,appointmentId:saved.appointmentId,replayed:true};}
+  const requestHash=await hash(JSON.stringify({tenantId,professionalId,serviceId,startMs,clientPhone,idempotencyKey}));
+  if(idemSnap.exists){const saved=f(idemSnap);if(saved.requestHash!==requestHash)throw fail("already-exists","Esta chave de operação já foi utilizada com outros dados.",409);await tx.rollback();return{ok:true,appointmentId:saved.appointmentId,replayed:true};}
   if(recent.length>=5)throw fail("resource-exhausted","Limite diário de agendamentos atingido para este número.",429);
   let chosen=professionalId;
   if(!chosen){const pros=await tx.query({from:[{collectionId:"professionals"}],where:eq("status","active"),limit:1},parent);if(!pros.length)throw fail("failed-precondition","Nenhum profissional disponível.",412);chosen=pros[0].id;}
@@ -106,7 +107,7 @@ export async function createPublicAppointment(input,env){
   guardPaths.forEach((path,index)=>{const revision=guards[index].fields?.revision;tx.transform(path,{professionalId:chosen,utcDay:firstDay+index,revision:Number.isSafeInteger(revision)?revision+1:1},["updatedAt"]);});
   if(!clients.length)tx.transform(parent+"/clients/"+clientId,{tenantId,name:clientName,phone:clientPhone,email:clientEmail,status:"active",origin:"public_booking"},["createdAt","updatedAt"]);
   tx.transform(parent+"/appointments/"+appointmentId,{tenantId,professionalId:chosen,serviceId,clientId,clientName,clientPhone,clientEmail:clientEmail||null,startAt:start,endAt:end,status:"confirmed",origin:"public_online",priceMinor,currency,notes},["createdAt","updatedAt"]);
-  tx.transform(idemPath,{requestHash:await hash(JSON.stringify({tenantId,professionalId,serviceId,startMs,clientPhone,idempotencyKey})),appointmentId},["createdAt"]);
+  tx.transform(idemPath,{requestHash,appointmentId},["createdAt"]);
   tx.transform(parent+"/auditLog/"+audit,{tenantId,actorUid:"public",action:"appointment.created_public",resourceType:"appointment",resourceId:appointmentId},["createdAt"]);
   await tx.commit();return{ok:true,appointmentId,replayed:false};
  }catch(e){await tx.rollback();throw e;}
