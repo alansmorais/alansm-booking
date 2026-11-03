@@ -71,7 +71,7 @@ export async function createTenant(claims, input, env) {
   const name = text(input?.name, 80);
   const slug = slugify(text(input?.slug, 80));
   const timezone = text(input?.timezone || "America/Sao_Paulo", 80);
-  const currency = text(input?.currency || "BRL", 3).toUpperCase();
+  const currency = text(input?.currency || "BRL", 10).toUpperCase();
   if (name.length < 2) throw fail("invalid-argument", "Informe um nome de empresa válido.");
   if (slug.length < 3 || RESERVED.has(slug)) throw fail("invalid-argument", "Escolha um endereço curto e disponível.");
   try { new Intl.DateTimeFormat("en-US", { timeZone: timezone }); } catch { throw fail("invalid-argument", "Fuso horário inválido."); }
