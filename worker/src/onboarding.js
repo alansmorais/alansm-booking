@@ -2,8 +2,8 @@ const PROJECT_ID = "gen-lang-client-0623364466";
 const DB_ROOT = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 const TOKEN_ROOT = "https://identitytoolkit.googleapis.com/v1/accounts:lookup";
 
-const text = (value, max) => typeof value === "string" ? value.trim().replace(/\\s+/g, " ").slice(0, max) : "";
-const slugify = (value) => value.normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+const text = (value, max) => typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max) : "";
+const slugify = (value) => value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
 const RESERVED = new Set(["admin","administrator","api","app","assets","auth","booking","dashboard","help","login","logout","public","register","root","settings","support","www"]);
 const enc = (value) => {
   if (value === null) return { nullValue: null };
