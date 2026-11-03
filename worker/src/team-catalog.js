@@ -36,7 +36,11 @@ export async function createMemberInvitation(claims,input,env){
  return withTx(env,async tx=>{
   const {member}=await manager(tx,claims.sub,tenantId);
   if(member.role!=="owner"&&role==="admin")throw fail("permission-denied","Apenas o proprietário pode convidar outro administrador.",403);
-  const pending=await tx.query({from:[{collectionId:"invitations"}],where:{fieldFilter:{field:{fieldPath:"status"},op:"EQUAL",value:{stringValue:"pending"}}},limit:100},"tenants/"+tenantId);
+  const [pending,existingMembers]=await Promise.all([
+   tx.query({from:[{collectionId:"invitations"}],where:{fieldFilter:{field:{fieldPath:"status"},op:"EQUAL",value:{stringValue:"pending"}}},limit:100},"tenants/"+tenantId),
+   tx.query({from:[{collectionId:"members"}],where:{fieldFilter:{field:{fieldPath:"email"},op:"EQUAL",value:{stringValue:email}}},limit:100},"tenants/"+tenantId)
+  ]);
+  if(existingMembers.some(d=>d.fields?.status==="active"))throw fail("already-exists","Este utilizador já pertence à empresa.",409);
   if(pending.some(d=>clean(d.fields?.email,254).toLowerCase()===email))throw fail("already-exists","Já existe um convite pendente para este e-mail.",409);
   const bytes=crypto.getRandomValues(new Uint8Array(32)),token=btoa(String.fromCharCode(...bytes)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,""),hash=await sha256(token),now=Date.now();
   tx.transform("tenants/"+tenantId+"/invitations/"+hash,{tenantId,email,role,status:"pending",invitedBy:claims.sub,expiresAt:new Date(now+7*86400000)},["createdAt"]);
