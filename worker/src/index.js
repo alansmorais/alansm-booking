@@ -3,6 +3,7 @@ import { createAppointment } from "./appointments.js";
 import { cancelAppointment } from "./cancellations.js";
 import { saveScheduleSettings, saveScheduleException, saveScheduleBlock, getScheduleSettings } from "./schedules.js";
 import { getTenantCatalog, getAgendaAppointments, getTenantClients, saveTenantClient } from "./tenant-data.js";
+import { createMemberInvitation, acceptMemberInvitation, updateMemberAccess, getTenantMembers, saveCatalogItem, updateAppointmentStatus } from "./team-catalog.js";
 const PROJECT_ID = "gen-lang-client-0623364466";
 const FIREBASE_ISSUER = `https://securetoken.google.com/${PROJECT_ID}`;
 const FIREBASE_JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
@@ -176,6 +177,12 @@ export default {
         else if (url.pathname === "/api/getAgendaAppointments") result = await getAgendaAppointments(authClaims, body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
         else if (url.pathname === "/api/getTenantClients") result = await getTenantClients(authClaims, body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
         else if (url.pathname === "/api/saveTenantClient") result = await saveTenantClient(authClaims, body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
+        else if (url.pathname === "/api/createMemberInvitation") result = await createMemberInvitation(authClaims, body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
+        else if (url.pathname === "/api/acceptMemberInvitation") result = await acceptMemberInvitation(authClaims, body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
+        else if (url.pathname === "/api/updateMemberAccess") result = await updateMemberAccess(authClaims, body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
+        else if (url.pathname === "/api/getTenantMembers") result = await getTenantMembers(authClaims, body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
+        else if (url.pathname === "/api/saveCatalogItem") result = await saveCatalogItem(authClaims, body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
+        else if (url.pathname === "/api/updateAppointmentStatus") result = await updateAppointmentStatus(authClaims, body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
         else return json({ error: { code: "not-implemented", message: "Esta operação ainda está em migração. Nenhum dado foi alterado." } }, 501, cors);
         return json(result, 200, cors);
       } catch (error) {
