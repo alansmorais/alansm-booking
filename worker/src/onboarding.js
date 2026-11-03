@@ -29,7 +29,8 @@ const dec = (v) => {
 const decodeDoc = (doc) => Object.fromEntries(Object.entries(doc.fields || {}).map(([k,v]) => [k,dec(v)]));
 async function firestore(env, path, init = {}) {
   const token = await env.getGoogleAccessToken();
-  const response = await fetch(`${DB_ROOT}/${path}`, { ...init, headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...(init.headers || {}) } });
+  const endpoint = path.startsWith(":") ? `${DB_ROOT}${path}` : `${DB_ROOT}/${path}`;
+  const response = await fetch(endpoint, { ...init, headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...(init.headers || {}) } });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const e = new Error(data.error?.message || "Falha no Firestore.");
