@@ -87,8 +87,8 @@ export class FirestoreRestTransaction {
   }
   async query(structuredQuery, parent = "") {
     this.assertReadable();
-    const path = parent ? `${ROOT}/${parent}` : ROOT;
-    const rows = await this.request(":runQuery", { structuredQuery, transaction: this.transactionId, ...(parent ? { parent: path } : {}) });
+    const parentPath = parent ? (parent.startsWith("projects/") ? parent : `projects/${PROJECT_ID}/databases/(default)/documents/${parent}`) : `projects/${PROJECT_ID}/databases/(default)/documents`;
+    const rows = await this.request(`/${parentPath}:runQuery`, { structuredQuery, transaction: this.transactionId });
     return rows.map((row) => row.document).filter(Boolean).map(decodeDocument);
   }
   create(documentPath, fields) {
