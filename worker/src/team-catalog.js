@@ -76,7 +76,7 @@ export async function updateMemberAccess(claims,input,env){
  });
 }
 export async function getTenantMembers(claims,input,env){
- const tenantId=clean(input?.tenantId,128);await verifyUser(claims,env);
+ const tenantId=clean(input?.tenantId,128);if(!validId(tenantId))throw fail("invalid-argument","Empresa inválida.");await verifyUser(claims,env);
  return withTx(env,async tx=>{
   await manager(tx,claims.sub,tenantId);
   const [members,invitations]=await Promise.all([
