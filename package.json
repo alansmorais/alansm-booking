@@ -15,7 +15,8 @@
     "test:invitation": "node --test tests/invitation-flow.test.mjs",
     "test:invitation-page": "node --test tests/invitation-page.test.mjs",
     "test:team": "node --test tests/team.test.mjs",
-    "test:firebase-init": "node --test tests/firebase-init.test.mjs"
+    "test:firebase-init": "node --test tests/firebase-init.test.mjs",
+    "preview:check": "npm install && npm --prefix functions install && npm run test:adapter && npm run test:auth-adapter && npm run test:workspace-adapter && npm run test:onboarding && npm run test:invitation && npm run test:invitation-page && npm run test:firebase-adapters && npm run test:team && node --check worker/src/index.js && node --check worker/src/schedules.js && node --check worker/tests/worker.test.mjs && node --check worker/tests/schedules.test.mjs && node --test worker/tests/worker.test.mjs worker/tests/schedules.test.mjs && npm run test:functions:build"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",
