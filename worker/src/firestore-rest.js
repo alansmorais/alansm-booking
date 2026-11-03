@@ -2,6 +2,10 @@ const PROJECT_ID = "gen-lang-client-0623364466";
 const ROOT = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
 export const encodeValue = (value) => {
+  if (value instanceof Date) {
+    if (!Number.isFinite(value.getTime())) throw new TypeError("Invalid Firestore timestamp.");
+    return { timestampValue: value.toISOString() };
+  }
   if (value === null) return { nullValue: null };
   if (typeof value === "string") return { stringValue: value };
   if (typeof value === "boolean") return { booleanValue: value };
