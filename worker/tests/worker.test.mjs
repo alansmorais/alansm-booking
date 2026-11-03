@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/index.js";
+import { createTenant } from "../src/onboarding.js";
 
 const env = { ALLOWED_ORIGINS: "https://preview.alansm-booking-preview.pages.dev" };
 
@@ -29,4 +30,29 @@ test("unknown origins are not granted cross-origin access", async () => {
     headers: { Origin: "https://attacker.example" }
   }), env);
   assert.equal(response.headers.get("access-control-allow-origin"), "null");
+});
+
+test("tenant onboarding rejects invalid company names before external access", async () => {
+  await assert.rejects(
+    createTenant({ sub: "test-user" }, { name: "A", slug: "empresa-valida" }, {}),
+    (error) => error.code === "invalid-argument"
+  );
+});
+
+test("tenant onboarding rejects reserved slugs", async () => {
+  await assert.rejects(
+    createTenant({ sub: "test-user" }, { name: "Empresa válida", slug: "admin" }, {}),
+    (error) => error.code === "invalid-argument"
+  );
+});
+
+test("tenant onboarding rejects invalid timezones and currencies", async () => {
+  await assert.rejects(
+    createTenant({ sub: "test-user" }, { name: "Empresa válida", slug: "empresa-valida", timezone: "Not/A_Timezone" }, {}),
+    (error) => error.code === "invalid-argument"
+  );
+  await assert.rejects(
+    createTenant({ sub: "test-user" }, { name: "Empresa válida", slug: "empresa-valida", currency: "REAIS" }, {}),
+    (error) => error.code === "invalid-argument"
+  );
 });
