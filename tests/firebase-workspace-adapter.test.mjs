@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("../public/firebase-workspace-adapter.js", import.meta.url), "utf8");
 const window = {};
-vm.runInNewContext(source, { window, Object, TypeError, Error, Number });
+vm.runInNewContext(source, { window, Object, TypeError, Error, Number, fetch: (...args) => globalThis.fetch(...args) });
 
 test("Firebase workspace calls tenant-scoped callable functions", async () => {
   const calls = [];
