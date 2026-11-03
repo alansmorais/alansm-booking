@@ -4,7 +4,7 @@ import { cancelAppointment } from "./cancellations.js";
 import { saveScheduleSettings, saveScheduleException, saveScheduleBlock, getScheduleSettings } from "./schedules.js";
 import { getTenantCatalog, getAgendaAppointments, getTenantClients, saveTenantClient } from "./tenant-data.js";
 import { createMemberInvitation, acceptMemberInvitation, updateMemberAccess, getTenantMembers, saveCatalogItem, updateAppointmentStatus } from "./team-catalog.js";
-import { getPublicBookingPage, getPublicAvailability } from "./public-booking.js";
+import { getPublicBookingPage, getPublicAvailability, createPublicAppointment } from "./public-booking.js";
 const PROJECT_ID = "gen-lang-client-0623364466";
 const FIREBASE_ISSUER = `https://securetoken.google.com/${PROJECT_ID}`;
 const FIREBASE_JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
@@ -141,13 +141,15 @@ export default {
         credentialsConfigured: Boolean(env.GOOGLE_SERVICE_ACCOUNT_JSON)
       }, 200, cors);
     }
-    if (url.pathname === "/api/getPublicBookingPage" || url.pathname === "/api/getPublicAvailability") {
+    if (url.pathname === "/api/getPublicBookingPage" || url.pathname === "/api/getPublicAvailability" || url.pathname === "/api/createPublicAppointment") {
       if (request.method !== "POST") return json({ error: { code: "method-not-allowed", message: "Método não permitido." } }, 405, cors);
       try {
         const body = await request.json().catch(() => ({}));
         const result = url.pathname === "/api/getPublicBookingPage"
           ? await getPublicBookingPage(body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) })
-          : await getPublicAvailability(body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
+          : url.pathname === "/api/getPublicAvailability"
+            ? await getPublicAvailability(body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) })
+            : await createPublicAppointment(body, { ...env, getGoogleAccessToken: () => getGoogleAccessToken(env) });
         return json(result, 200, cors);
       } catch (error) {
         const code = error.code || "internal";
