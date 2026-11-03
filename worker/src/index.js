@@ -1,5 +1,6 @@
 import { createTenant, getSession } from "./onboarding.js";
 import { createAppointment } from "./appointments.js";
+import { cancelAppointment } from "./cancellations.js";
 const PROJECT_ID = "gen-lang-client-0623364466";
 const FIREBASE_ISSUER = `https://securetoken.google.com/${PROJECT_ID}`;
 const FIREBASE_JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
@@ -158,6 +159,10 @@ export default {
           getGoogleAccessToken: () => getGoogleAccessToken(env)
         });
         else if (url.pathname === "/api/createAppointment") result = await createAppointment(authClaims, body, {
+          ...env,
+          getGoogleAccessToken: () => getGoogleAccessToken(env)
+        });
+        else if (url.pathname === "/api/cancelAppointment") result = await cancelAppointment(authClaims, body, {
           ...env,
           getGoogleAccessToken: () => getGoogleAccessToken(env)
         });
