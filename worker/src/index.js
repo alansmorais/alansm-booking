@@ -1,3 +1,4 @@
+import { createTenant, getSession } from "./onboarding.js";
 const PROJECT_ID = "gen-lang-client-0623364466";
 const FIREBASE_ISSUER = `https://securetoken.google.com/${PROJECT_ID}`;
 const FIREBASE_JWKS_URL = "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com";
@@ -139,10 +140,29 @@ export default {
         const authorization = request.headers.get("Authorization") || "";
         const match = authorization.match(/^Bearer\s+(.+)$/i);
         if (!match) return json({ error: { code: "unauthenticated", message: "Faça login para continuar." } }, 401, cors);
-        await verifyFirebaseIdToken(match[1]);
-        return json({ error: { code: "not-implemented", message: "Esta operação ainda está em migração. Nenhum dado foi alterado." } }, 501, cors);
+        const claims = await verifyFirebaseIdToken(match[1]);
+        if (claims.email_verified !== true && url.pathname === "/api/createTenant") {
+          return json({ error: { code: "failed-precondition", message: "Confirme o seu e-mail antes de criar uma empresa." } }, 412, cors);
+        }
+        const authClaims = { ...claims, __idToken: match[1] };
+        let result;
+        if (request.method !== "POST") return json({ error: { code: "method-not-allowed", message: "Método não permitido." } }, 405, cors);
+        const body = await request.json().catch(() => ({}));
+        if (url.pathname === "/api/createTenant") result = await createTenant(authClaims, body, {
+          ...env,
+          getGoogleAccessToken: () => getGoogleAccessToken(env)
+        });
+        else if (url.pathname === "/api/getSession") result = await getSession(authClaims, {
+          ...env,
+          getGoogleAccessToken: () => getGoogleAccessToken(env)
+        });
+        else return json({ error: { code: "not-implemented", message: "Esta operação ainda está em migração. Nenhum dado foi alterado." } }, 501, cors);
+        return json(result, 200, cors);
       } catch (error) {
-        return json({ error: { code: "unauthenticated", message: error.message || "Sessão inválida." } }, 401, cors);
+        const code = error.code || (error.status === 401 ? "unauthenticated" : "internal");
+        const status = error.status || (code === "unauthenticated" ? 401 : code === "permission-denied" ? 403 : code === "already-exists" ? 409 : code === "failed-precondition" ? 412 : code === "invalid-argument" ? 400 : 500);
+        const message = status >= 500 ? "Não foi possível concluir a operação. Tente novamente." : (error.message || "Não foi possível concluir a operação.");
+        return json({ error: { code, message } }, status, cors);
       }
     }
     return json({ error: { code: "not-found", message: "Rota não encontrada." } }, 404, cors);
