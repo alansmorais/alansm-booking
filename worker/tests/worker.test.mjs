@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/index.js";
 import { createTenant } from "../src/onboarding.js";
+import { FirestoreRestTransaction, encodeValue, decodeValue } from "../src/firestore-rest.js";
 
 const env = { ALLOWED_ORIGINS: "https://preview.alansm-booking-preview.pages.dev" };
 
@@ -55,4 +56,45 @@ test("tenant onboarding rejects invalid timezones and currencies", async () => {
     createTenant({ sub: "test-user" }, { name: "Empresa válida", slug: "empresa-valida", currency: "REAIS" }, {}),
     (error) => error.code === "invalid-argument"
   );
+});
+
+
+test("Firestore REST transaction reads documents and commits queued writes atomically", async () => {
+  const calls = [];
+  const request = async (path, body) => {
+    calls.push({ path, body });
+    if (path === ":batchGet") return [{ found: { name: "projects/p/databases/(default)/documents/tenants/t1", fields: { status: { stringValue: "active" }, seats: { integerValue: "4" } } } }];
+    if (path === ":commit") return { writeResults: [{}] };
+    return [];
+  };
+  const tx = new FirestoreRestTransaction(request, "transaction-bytes");
+  const tenant = await tx.get("tenants/t1");
+  assert.equal(tenant.exists, true);
+  assert.equal(tenant.fields.status, "active");
+  assert.equal(tenant.fields.seats, 4);
+  tx.create("tenants/t1/auditLog/a1", { action: "created", active: true });
+  await tx.commit();
+  assert.equal(calls[0].path, ":batchGet");
+  assert.equal(calls[0].body.transaction, "transaction-bytes");
+  assert.equal(calls[1].path, ":commit");
+  assert.equal(calls[1].body.transaction, "transaction-bytes");
+  assert.equal(calls[1].body.writes.length, 1);
+  assert.equal(calls[1].body.writes[0].currentDocument.exists, false);
+});
+
+test("Firestore REST transaction prevents reads after the first write", async () => {
+  const tx = new FirestoreRestTransaction(async () => [], "tx");
+  tx.set("tenants/t1", { status: "active" });
+  await assert.rejects(tx.get("tenants/t1"), /all reads before writes/);
+});
+
+test("Firestore REST transaction encodes and decodes Firestore values", () => {
+  assert.deepEqual(encodeValue({ count: 3, active: true, tags: ["a", "b"] }), {
+    mapValue: { fields: {
+      count: { integerValue: "3" },
+      active: { booleanValue: true },
+      tags: { arrayValue: { values: [{ stringValue: "a" }, { stringValue: "b" }] } }
+    } }
+  });
+  assert.deepEqual(decodeValue({ mapValue: { fields: { amount: { doubleValue: 12.5 } } } }), { amount: 12.5 });
 });
