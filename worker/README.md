@@ -17,9 +17,13 @@ This is the separate backend planned for the Preview environment. It does not al
   - `POST /api/saveScheduleException`: records company closures or professional absences (up to 90 days).
   - `POST /api/saveScheduleBlock`: creates, updates or removes time blocks.
   - `POST /api/getScheduleSettings`: reads schedule hours, exceptions and blocks for authorized tenant members.
+  - `POST /api/getTenantCatalog`: reads active professionals and services for authorized tenant members.
+  - `POST /api/getAgendaAppointments`: reads a bounded agenda window (maximum 31 days) for authorized tenant members.
+  - `POST /api/getTenantClients`: reads the bounded client directory for authorized tenant members.
+  - `POST /api/saveTenantClient`: creates or updates a tenant client record with an audit event.
 - Other business API routes still return HTTP 501 until migrated.
 
-**Do not connect the website to this Worker yet.** The four schedule operations have validation unit tests, but the Worker routes have not been tested end-to-end, but have not been tested end-to-end against a deployed Worker and the live Firestore project. The remaining 13 callable operations still need to be ported with their authorization, validation, data shaping, and Firestore transaction semantics.
+**Do not connect the website to this Worker yet.** The Worker routes have unit-level validation coverage but have not been tested end-to-end against a deployed Worker and the live Firestore project. Twelve of the 21 callable operations are now migrated; nine still need to be ported with their authorization, validation, data shaping, and Firestore transaction semantics.
 
 ## Required Cloudflare configuration (not configured yet)
 
