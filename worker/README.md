@@ -19,7 +19,7 @@ This is the separate backend planned for the Preview environment. It does not al
   - `POST /api/getScheduleSettings`: reads schedule hours, exceptions and blocks for authorized tenant members.
 - Other business API routes still return HTTP 501 until migrated.
 
-**Do not connect the website to this Worker yet.** These two operations have unit-level validation coverage, but have not been tested end-to-end against a deployed Worker and the live Firestore project. The remaining 15 callable operations still need to be ported with their authorization, validation, data shaping, and Firestore transaction semantics.
+**Do not connect the website to this Worker yet.** The four schedule operations have validation unit tests, but the Worker routes have not been tested end-to-end, but have not been tested end-to-end against a deployed Worker and the live Firestore project. The remaining 13 callable operations still need to be ported with their authorization, validation, data shaping, and Firestore transaction semantics.
 
 ## Required Cloudflare configuration (not configured yet)
 
