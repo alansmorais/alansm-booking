@@ -47,10 +47,15 @@ export async function saveScheduleException(claims,input,env){
 }
 export async function saveScheduleBlock(claims,input,env){
  const tenantId=clean(input?.tenantId,128),blockId=clean(input?.blockId,128),date=input?.date,professionalId=clean(input?.professionalId,128);
- if(!validId(tenantId)||!dateOK(date))throw fail("invalid-argument","Empresa ou data inválida.");await verifyUser(claims,env);
+ const removing=input?.remove===true;
+ if(!validId(tenantId)||!dateOK(date))throw fail("invalid-argument","Empresa ou data inválida.");
+ if(removing&&!validId(blockId))throw fail("invalid-argument","Identificador do bloqueio inválido.");
+ const start=minutes(input?.start),end=minutes(input?.end);
+ if(!removing&&(start===null||end===null||start>=end))throw fail("invalid-argument","Horário do bloqueio inválido.");
+ if(professionalId&&!validId(professionalId))throw fail("invalid-argument","Profissional inválido.");
+ await verifyUser(claims,env);
  return withTx(env,async tx=>{await context(tx,claims.sub,tenantId,true);
- if(input?.remove===true){if(!validId(blockId))throw fail("invalid-argument","Identificador do bloqueio inválido.");if(!(await tx.get("tenants/"+tenantId+"/blocks/"+blockId)).exists)throw fail("not-found","Bloqueio não encontrado.",404);tx.delete("tenants/"+tenantId+"/blocks/"+blockId);tx.transform("tenants/"+tenantId+"/auditLog/"+auditId(),{tenantId,actorUid:claims.sub,action:"schedule.block_removed",resourceType:"scheduleBlock",resourceId:blockId},["createdAt"]);return{ok:true,blockId,removed:true};}
- const start=minutes(input?.start),end=minutes(input?.end);if(!validId(blockId||"new")||start===null||end===null||start>=end)throw fail("invalid-argument","Horário do bloqueio inválido.");
+ if(removing){if(!validId(blockId))throw fail("invalid-argument","Identificador do bloqueio inválido.");if(!(await tx.get("tenants/"+tenantId+"/blocks/"+blockId)).exists)throw fail("not-found","Bloqueio não encontrado.",404);tx.delete("tenants/"+tenantId+"/blocks/"+blockId);tx.transform("tenants/"+tenantId+"/auditLog/"+auditId(),{tenantId,actorUid:claims.sub,action:"schedule.block_removed",resourceType:"scheduleBlock",resourceId:blockId},["createdAt"]);return{ok:true,blockId,removed:true};}
  if(professionalId&&!(await tx.get("tenants/"+tenantId+"/professionals/"+professionalId)).exists)throw fail("not-found","Profissional não encontrado.",404);
  if(blockId&&!(await tx.get("tenants/"+tenantId+"/blocks/"+blockId)).exists)throw fail("not-found","Bloqueio não encontrado.",404);
  const id=blockId||auditId();const now=new Date();const blockData={tenantId,date,start:input.start,end:input.end,professionalId:professionalId||null,reason:clean(input.reason,240),updatedAt:now,updatedBy:claims.sub};if(!blockId)blockData.createdAt=now;tx.set("tenants/"+tenantId+"/blocks/"+id,blockData,{merge:true});
