@@ -26,6 +26,19 @@ test("business API refuses requests without Firebase bearer token", async () => 
   assert.equal(body.error.code, "unauthenticated");
 });
 
+
+test("public booking routes are reachable without a signed-in customer", async () => {
+  const response = await worker.fetch(new Request("https://api.example/api/getPublicBookingPage", {
+    method: "POST",
+    headers: { Origin: "https://preview.alansm-booking-preview.pages.dev", "content-type": "application/json" },
+    body: JSON.stringify({ slug: "api" })
+  }), env);
+  const body = await response.json();
+  assert.equal(response.status, 400);
+  assert.equal(body.error.code, "invalid-argument");
+  assert.equal(response.headers.get("access-control-allow-origin"), "https://preview.alansm-booking-preview.pages.dev");
+});
+
 test("unknown origins are not granted cross-origin access", async () => {
   const response = await worker.fetch(new Request("https://api.example/health", {
     headers: { Origin: "https://attacker.example" }
