@@ -37,6 +37,55 @@ test("Firebase workspace calls tenant-scoped callable functions", async () => {
   assert.equal(calls[5].payload.professionalId, "pro-1");
 });
 
+
+test("Worker workspace sends Firebase bearer tokens and decodes API errors", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ ok: true, tenants: [{ tenantId: "worker-tenant", name: "Empresa" }] }), {
+      status: 200, headers: { "content-type": "application/json" }
+    });
+  };
+  try {
+    const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+      apiBaseUrl: "https://preview-api.example.workers.dev",
+      authAdapter: { mode: "firebase", getCurrentUser: () => ({
+        emailVerified: true, getIdToken: async () => "firebase-id-token"
+      }) }
+    });
+    assert.equal(adapter.mode, "worker");
+    const session = await adapter.getSession();
+    assert.equal(session.tenants[0].tenantId, "worker-tenant");
+    assert.equal(calls[0].url, "https://preview-api.example.workers.dev/api/getSession");
+    assert.equal(calls[0].options.headers.Authorization, "Bearer firebase-id-token");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Worker workspace calls public endpoints without a Firebase login token", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ ok: true, tenant: { name: "Empresa" } }), {
+      status: 200, headers: { "content-type": "application/json" }
+    });
+  };
+  try {
+    const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
+      apiBaseUrl: "https://preview-api.example.workers.dev",
+      authAdapter: { mode: "firebase", getCurrentUser: () => null }
+    });
+    const page = await adapter.getPublicBookingPage({ slug: "empresa" });
+    assert.equal(page.tenant.name, "Empresa");
+    assert.equal("Authorization" in calls[0].options.headers, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Firebase workspace blocks tenant creation for unverified users", async () => {
   let invoked = false;
   const adapter = window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
