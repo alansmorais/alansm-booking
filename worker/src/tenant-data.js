@@ -1,6 +1,6 @@
 import { createFirestoreRest } from "./firestore-rest.js";
 
-const clean=(v,n)=>typeof v==="string"?v.trim().replace(/\\s+/g," ").slice(0,n):"";
+const clean=(v,n)=>typeof v==="string"?v.trim().replace(/\s+/g," ").slice(0,n):"";
 const validId=v=>typeof v==="string"&&v.length>0&&v.length<=128&&!v.includes("/");
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const fields=s=>s?.fields||{};
@@ -70,14 +70,14 @@ export async function getTenantClients(claims,input,env){
 }
 export async function saveTenantClient(claims,input,env){
  const tenantId=clean(input?.tenantId,128),clientId=clean(input?.clientId,128),name=clean(input?.name,100),phone=clean(input?.phone,30),email=clean(input?.email,254).toLowerCase(),notes=clean(input?.notes,300),status=clean(input?.status||"active",20);
- if(!validId(tenantId)||(clientId&&!validId(clientId))||!["active","inactive"].includes(status)||(status==="active"&&name.length<2)||(email&&!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))||(phone&&!/^[+0-9() .-]{7,30}$/.test(phone)))throw fail("invalid-argument","Nome, contacto ou estado do cliente inválido.");
+ if(!validId(tenantId)||(clientId&&!validId(clientId))||!["active","inactive"].includes(status)||(status==="active"&&name.length<2)||(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))||(phone&&!/^[+0-9() .-]{7,30}$/.test(phone)))throw fail("invalid-argument","Nome, contacto ou estado do cliente inválido.");
  await verifyUser(claims,env);
  return run(env,async tx=>{
   await requireMember(tx,claims.sub,tenantId);
   const path="tenants/"+tenantId+"/clients/"+(clientId||crypto.randomUUID().replace(/-/g,""));
   const existing=await tx.get(path);
   if(clientId&&!existing.exists)throw fail("not-found","Cliente não encontrado.",404);
-  const previous=fields(existing),data={tenantId,name:name||clean(previous.name,100),phone,email,notes,status,updatedBy:claims.sub};
+  const previous=fields(existing),data={tenantId,name:name||clean(previous.name,100),phone:phone||(input?.phone===""?"":clean(previous.phone,30)),email:email||(input?.email===""?"":clean(previous.email,254)),notes:notes||(input?.notes===""?"":clean(previous.notes,300)),status,updatedBy:claims.sub};
   if(!existing.exists)data.createdBy=claims.sub;
   tx.transform(path,data,existing.exists?["updatedAt"]:["createdAt","updatedAt"]);
   tx.transform("tenants/"+tenantId+"/auditLog/"+auditId(),{tenantId,actorUid:claims.sub,action:"client."+(!existing.exists?"created":status==="inactive"?"deactivated":"updated"),resourceType:"client",resourceId:path.split("/").pop()},["createdAt"]);
