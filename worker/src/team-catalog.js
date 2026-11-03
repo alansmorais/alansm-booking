@@ -23,6 +23,12 @@ async function manager(tx,uid,tenantId){
  if(!t.exists||fields(t).status!=="active"||!m.exists||fields(m).status!=="active"||!["owner","admin"].includes(clean(fields(m).role,20)))throw fail("permission-denied","Não tem acesso a esta empresa.",403);
  return {tenant:fields(t),member:fields(m)};
 }
+async function reader(tx,uid,tenantId){
+ if(!validId(tenantId))throw fail("invalid-argument","Empresa inválida.");
+ const [t,m]=await Promise.all([tx.get("tenants/"+tenantId),tx.get("tenants/"+tenantId+"/members/"+uid)]);
+ if(!t.exists||fields(t).status!=="active"||!m.exists||fields(m).status!=="active"||!["owner","admin","staff"].includes(clean(fields(m).role,20)))throw fail("permission-denied","Não tem acesso a esta empresa.",403);
+ return {tenant:fields(t),member:fields(m)};
+}
 export async function createMemberInvitation(claims,input,env){
  const tenantId=clean(input?.tenantId,128),email=clean(input?.email,254).toLowerCase(),role=clean(input?.role,20);
  if(!validId(tenantId)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!["admin","staff"].includes(role))throw fail("invalid-argument","E-mail, empresa ou função inválidos.");
@@ -104,7 +110,7 @@ export async function updateAppointmentStatus(claims,input,env){
  if(!validId(tenantId)||!validId(appointmentId)||!["confirmed","completed","no_show"].includes(status))throw fail("invalid-argument","Empresa, agendamento ou estado inválido.");
  await verifyUser(claims,env);
  return withTx(env,async tx=>{
-  await manager(tx,claims.sub,tenantId);
+  await reader(tx,claims.sub,tenantId);
   const path="tenants/"+tenantId+"/appointments/"+appointmentId,appt=await tx.get(path);
   if(!appt.exists)throw fail("not-found","Agendamento não encontrado.",404);
   if(fields(appt).status==="cancelled")throw fail("failed-precondition","Um agendamento cancelado não pode ter o estado alterado.",412);
