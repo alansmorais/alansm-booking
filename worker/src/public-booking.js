@@ -85,11 +85,13 @@ export async function createPublicAppointment(input,env){
   if(!Number.isInteger(duration)||duration<5||duration>480||duration%5!==0||!Number.isSafeInteger(priceMinor)||priceMinor<0||!/^[A-Z]{3}$/.test(currency))throw fail("failed-precondition","O serviço possui duração ou preço inválido.",412);
   const endMs=startMs+duration*60000,start=new Date(startMs),end=new Date(endMs),startLocal=localParts(start,timezone),endLocal=localParts(new Date(endMs-1),timezone),endMinute=endLocal.minute+1;
   if(startLocal.date!==endLocal.date)throw fail("invalid-argument","O agendamento não pode cruzar a meia-noite local.");
-  const [proSnap,companySchedule,proSchedule,companyException,proException,blocks,appointments]=await Promise.all([
+  const firstDay=Math.floor(startMs/86400000),lastDay=Math.floor((endMs-1)/86400000),guardBase=await hash(chosen),guardPaths=Array.from({length:lastDay-firstDay+1},(_,i)=>parent+"/bookingGuards/"+guardBase.slice(0,24)+"_"+(firstDay+i));
+  const [proSnap,companySchedule,proSchedule,companyException,proException,blocks,appointments,guards]=await Promise.all([
    tx.get(parent+"/professionals/"+chosen),tx.get(parent+"/scheduleSettings/company"),tx.get(parent+"/scheduleSettings/professional_"+chosen),
    tx.get(parent+"/scheduleExceptions/"+startLocal.date),tx.get(parent+"/professionalExceptions/"+chosen+"_"+startLocal.date),
    tx.query({from:[{collectionId:"blocks"}],where:eq("date",startLocal.date)},parent),
-   tx.query({from:[{collectionId:"appointments"}],where:and(eq("professionalId",chosen),{fieldFilter:{field:{fieldPath:"startAt"},op:"GREATER_THAN_OR_EQUAL",value:{timestampValue:new Date(startMs-480*60000).toISOString()}}},{fieldFilter:{field:{fieldPath:"startAt"},op:"LESS_THAN",value:{timestampValue:new Date(endMs).toISOString()}}})},parent)
+   tx.query({from:[{collectionId:"appointments"}],where:and(eq("professionalId",chosen),{fieldFilter:{field:{fieldPath:"startAt"},op:"GREATER_THAN_OR_EQUAL",value:{timestampValue:new Date(startMs-480*60000).toISOString()}}},{fieldFilter:{field:{fieldPath:"startAt"},op:"LESS_THAN",value:{timestampValue:new Date(endMs).toISOString()}}})},parent),
+   Promise.all(guardPaths.map(path=>tx.get(path)))
   ]);
   if(!proSnap.exists||f(proSnap).status!=="active")throw fail("failed-precondition","Profissional não disponível.",412);
   if(companyException.exists||proException.exists)throw fail("failed-precondition","A empresa ou profissional está fechado nesta data.",412);
@@ -101,6 +103,7 @@ export async function createPublicAppointment(input,env){
   const conflict=appointments.some(d=>{const a=d.fields||{},s=Date.parse(a.startAt),e=Date.parse(a.endAt);return["confirmed","booked","pending"].includes(a.status)&&Number.isFinite(s)&&Number.isFinite(e)&&startMs<e&&s<endMs;});
   if(conflict)throw fail("already-exists","Este profissional já possui um agendamento neste horário.",409);
   const clientId=clients.length?clients[0].id:crypto.randomUUID().replace(/-/g,""),appointmentId=crypto.randomUUID().replace(/-/g,""),audit=auditId();
+  guardPaths.forEach((path,index)=>{const revision=guards[index].fields?.revision;tx.transform(path,{professionalId:chosen,utcDay:firstDay+index,revision:Number.isSafeInteger(revision)?revision+1:1},["updatedAt"]);});
   if(!clients.length)tx.transform(parent+"/clients/"+clientId,{tenantId,name:clientName,phone:clientPhone,email:clientEmail,status:"active",origin:"public_booking"},["createdAt","updatedAt"]);
   tx.transform(parent+"/appointments/"+appointmentId,{tenantId,professionalId:chosen,serviceId,clientId,clientName,clientPhone,clientEmail:clientEmail||null,startAt:start,endAt:end,status:"confirmed",origin:"public_online",priceMinor,currency,notes},["createdAt","updatedAt"]);
   tx.transform(idemPath,{requestHash:await hash(JSON.stringify({tenantId,professionalId,serviceId,startMs,clientPhone,idempotencyKey})),appointmentId},["createdAt"]);
