@@ -588,7 +588,7 @@ async function initPublicCustomerBooking(slug){
    if(runtime?.ready){
     const fb=await runtime.ready;
     adapter=window.BookingFirebaseWorkspace.createFirebaseWorkspaceAdapter({
-     functions:fb.functions,httpsCallable:fb.functionsSdk.httpsCallable,authAdapter:window.BookingAuth.createDemoAdapter()
+     functions:fb.functions,httpsCallable:fb.functionsSdk.httpsCallable,authAdapter:window.BookingAuth.createDemoAdapter(),apiBaseUrl:window.BOOKING_API_BASE_URL||""
     });
    }
   }
