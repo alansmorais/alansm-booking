@@ -39,7 +39,7 @@ test("dashboard switches to tenant-scoped Firebase data after authentication", a
   assert.match(app, /firebaseWorkspaceAdapter\.getAgenda/);
   assert.match(app, /firebaseMode\)\{renderFirebaseView\(\);return;/);
   assert.match(app, /Nenhum dado fictício será exibido aqui/);
-  assert.match(app, /Dados carregados do Firebase Emulator/);
+  assert.match(app, /Dados carregados do '+firebaseModeLabel/);
 });
 
 test("Firebase dashboard reads no more than the backend 31-day appointment window", async () => {
