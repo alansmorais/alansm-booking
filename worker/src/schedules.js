@@ -53,7 +53,7 @@ export async function saveScheduleBlock(claims,input,env){
  const start=minutes(input?.start),end=minutes(input?.end);if(!validId(blockId||"new")||start===null||end===null||start>=end)throw fail("invalid-argument","Horário do bloqueio inválido.");
  if(professionalId&&!(await tx.get("tenants/"+tenantId+"/professionals/"+professionalId)).exists)throw fail("not-found","Profissional não encontrado.",404);
  if(blockId&&!(await tx.get("tenants/"+tenantId+"/blocks/"+blockId)).exists)throw fail("not-found","Bloqueio não encontrado.",404);
- const id=blockId||auditId();tx.set("tenants/"+tenantId+"/blocks/"+id,{tenantId,date,start:input.start,end:input.end,professionalId:professionalId||null,reason:clean(input.reason,240),updatedBy:claims.sub},{merge:true});
+ const id=blockId||auditId();const now=new Date();const blockData={tenantId,date,start:input.start,end:input.end,professionalId:professionalId||null,reason:clean(input.reason,240),updatedAt:now,updatedBy:claims.sub};if(!blockId)blockData.createdAt=now;tx.set("tenants/"+tenantId+"/blocks/"+id,blockData,{merge:true});
  tx.transform("tenants/"+tenantId+"/auditLog/"+auditId(),{tenantId,actorUid:claims.sub,action:blockId?"schedule.block_updated":"schedule.block_created",resourceType:"scheduleBlock",resourceId:id},["createdAt"]);return{ok:true,blockId:id,removed:false};});
 }
 export async function getScheduleSettings(claims,input,env){
