@@ -6,3 +6,4 @@ preview_urls = false
 
 [vars]
 ALLOWED_ORIGINS = "https://preview.alansm-booking-preview.pages.dev,https://1b9158c1.alansm-booking-preview.pages.dev"
+FIREBASE_WEB_API_KEY = "AIzaSyB9fEcMN6Ve5r8GLqu5yilBYSAB7trmVYM"
