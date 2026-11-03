@@ -98,3 +98,16 @@ test("Firestore REST transaction encodes and decodes Firestore values", () => {
   });
   assert.deepEqual(decodeValue({ mapValue: { fields: { amount: { doubleValue: 12.5 } } } }), { amount: 12.5 });
 });
+
+
+test("Firestore collection queries use the parent document resource in the REST URL", async () => {
+  let captured;
+  const tx = new FirestoreRestTransaction(async (path, body) => {
+    captured = { path, body };
+    return [];
+  }, "tx-query");
+  await tx.query({ from: [{ collectionId: "appointments" }] }, "tenants/tenant-1");
+  assert.equal(captured.path, "https://firestore.googleapis.com/v1/projects/gen-lang-client-0623364466/databases/(default)/documents/tenants/tenant-1:runQuery");
+  assert.equal(captured.body.transaction, "tx-query");
+  assert.equal("parent" in captured.body, false);
+});
