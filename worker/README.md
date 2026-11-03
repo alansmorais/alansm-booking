@@ -7,6 +7,7 @@ This is the separate backend planned for the Preview environment. It does not al
 - Firebase ID-token signature and claim verification.
 - Firebase Identity Toolkit account lookup for email verification and disabled-account checks.
 - Google service-account OAuth exchange foundation for Firestore REST access.
+- Firestore REST transaction abstraction with explicit begin/read/write/commit/rollback phases, value encoding, and read-before-write enforcement.
 - CORS allow-list restricted to the Preview site.
 - Health endpoint at `/health`.
 - Migrated operations:
