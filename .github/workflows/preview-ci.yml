@@ -56,6 +56,11 @@ jobs:
           node --check worker/tests/tenant-data.test.mjs
           node --check worker/tests/team-catalog.test.mjs
           node --check worker/tests/public-booking.test.mjs
+          node --check worker/tests/mock-backend.mjs
+          node --check worker/tests/auth-tokens.test.mjs
+          node --check worker/tests/tenant-operations.test.mjs
+          node --check worker/tests/catalog-clients.test.mjs
+          node --check worker/tests/schedules-appointments.test.mjs
           node --check tests/team.test.mjs
       - name: Test demo data adapter
         run: npm run test:adapter && npm run test:auth-adapter && npm run test:workspace-adapter && npm run test:onboarding && npm run test:invitation && npm run test:invitation-page && npm run test:firebase-adapters && npm run test:team && node --test worker/tests/*.test.mjs

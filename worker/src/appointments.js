@@ -6,7 +6,7 @@ const MAX_BOOKING_DAYS_AHEAD = 180;
 const ACTIVE_STATUSES = new Set(["pending", "booked", "confirmed"]);
 const ROOT = "projects/gen-lang-client-0623364466/databases/(default)/documents";
 
-const clean = (value, max) => typeof value === "string" ? value.trim().replace(/\\s+/g, " ").slice(0, max) : "";
+const clean = (value, max) => typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max) : "";
 const validId = (value) => value.length > 0 && value.length <= 128 && !value.includes("/");
 const fail = (code, message, status = 400) => Object.assign(new Error(message), { code, status });
 const sha256 = async (value) => {
@@ -18,7 +18,7 @@ const docPath = (path) => `${ROOT}/${path}`;
 const fieldsOf = (snap) => snap?.fields || {};
 const field = (snap, key) => fieldsOf(snap)[key];
 const clockMinutes = (value) => {
-  if (typeof value !== "string" || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(value)) return null;
+  if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null;
   const [h,m] = value.split(":").map(Number);
   return h * 60 + m;
 };

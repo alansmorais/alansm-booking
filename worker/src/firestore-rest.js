@@ -12,7 +12,7 @@ export const encodeValue = (value) => {
   if (typeof value === "number" && Number.isInteger(value)) return { integerValue: String(value) };
   if (typeof value === "number") return { doubleValue: value };
   if (Array.isArray(value)) return { arrayValue: { values: value.map(encodeValue) } };
-  if (value && typeof value === "object") return { mapValue: { fields: Object.fromEntries(Object.entries(value).map(([k,v]) => [k,encodeValue(v)])) } };
+  if (value && typeof value === "object") return { mapValue: { fields: Object.fromEntries(Object.entries(value).filter(([_,v]) => v !== undefined).map(([k,v]) => [k,encodeValue(v)])) } };
   throw new TypeError("Unsupported Firestore value.");
 };
 
@@ -85,41 +85,50 @@ export class FirestoreRestTransaction {
   }
   async get(documentPath) {
     this.assertReadable();
-    const fullName = documentPath.startsWith("projects/") ? documentPath : `${ROOT}/${documentPath}`;
+    const clean = String(documentPath || "").replace(/^\/+/, "");
+    const fullName = clean.startsWith("projects/") ? clean : `${ROOT}/${clean}`;
     const rows = await this.request(":batchGet", { documents: [fullName], transaction: this.transactionId });
     const row = rows.find((item) => item.found || item.missing);
     return row?.found ? { exists: true, ...decodeDocument(row.found) } : { exists: false, fields: {} };
   }
   async query(structuredQuery, parent = "") {
     this.assertReadable();
-    const parentPath = parent ? (parent.startsWith("projects/") ? parent : `projects/${PROJECT_ID}/databases/(default)/documents/${parent}`) : `projects/${PROJECT_ID}/databases/(default)/documents`;
+    const cleanParent = String(parent || "").replace(/^\/+/, "");
+    const parentPath = cleanParent ? (cleanParent.startsWith("projects/") ? cleanParent : `projects/${PROJECT_ID}/databases/(default)/documents/${cleanParent}`) : `projects/${PROJECT_ID}/databases/(default)/documents`;
     const rows = await this.request(`https://firestore.googleapis.com/v1/${parentPath}:runQuery`, { structuredQuery, transaction: this.transactionId });
     return rows.map((row) => row.document).filter(Boolean).map(decodeDocument);
   }
   create(documentPath, fields) {
     this.assertWritable();
-    const name = documentPath.startsWith("projects/") ? documentPath : `${ROOT}/${documentPath}`;
-    this.writes.push({ update: { name, fields: Object.fromEntries(Object.entries(fields).map(([k,v]) => [k,encodeValue(v)])) }, currentDocument: { exists: false } });
+    const clean = String(documentPath || "").replace(/^\/+/, "");
+    const name = clean.startsWith("projects/") ? clean : `${ROOT}/${clean}`;
+    const defined = Object.entries(fields).filter(([_,v]) => v !== undefined);
+    this.writes.push({ update: { name, fields: Object.fromEntries(defined.map(([k,v]) => [k,encodeValue(v)])) }, currentDocument: { exists: false } });
     return this;
   }
   set(documentPath, fields, { merge = false } = {}) {
     this.assertWritable();
-    const name = documentPath.startsWith("projects/") ? documentPath : `${ROOT}/${documentPath}`;
-    const update = { name, fields: Object.fromEntries(Object.entries(fields).map(([k,v]) => [k,encodeValue(v)])) };
-    this.writes.push({ update, ...(merge ? { updateMask: { fieldPaths: Object.keys(fields) } } : {}) });
+    const clean = String(documentPath || "").replace(/^\/+/, "");
+    const name = clean.startsWith("projects/") ? clean : `${ROOT}/${clean}`;
+    const defined = Object.entries(fields).filter(([_,v]) => v !== undefined);
+    const update = { name, fields: Object.fromEntries(defined.map(([k,v]) => [k,encodeValue(v)])) };
+    this.writes.push({ update, ...(merge ? { updateMask: { fieldPaths: defined.map(([k]) => k) } } : {}) });
     return this;
   }
   delete(documentPath) {
     this.assertWritable();
-    const name = documentPath.startsWith("projects/") ? documentPath : `${ROOT}/${documentPath}`;
+    const clean = String(documentPath || "").replace(/^\/+/, "");
+    const name = clean.startsWith("projects/") ? clean : `${ROOT}/${clean}`;
     this.writes.push({ delete: name });
     return this;
   }
   transform(documentPath, fields, timestampFields = []) {
     this.assertWritable();
-    const name = documentPath.startsWith("projects/") ? documentPath : `${ROOT}/${documentPath}`;
+    const clean = String(documentPath || "").replace(/^\/+/, "");
+    const name = clean.startsWith("projects/") ? clean : `${ROOT}/${clean}`;
+    const defined = Object.entries(fields).filter(([_,v]) => v !== undefined);
     this.writes.push({
-      update: { name, fields: Object.fromEntries(Object.entries(fields).map(([k,v]) => [k,encodeValue(v)])) },
+      update: { name, fields: Object.fromEntries(defined.map(([k,v]) => [k,encodeValue(v)])) },
       ...(timestampFields.length ? { updateTransforms: timestampFields.map(fieldPath => ({ fieldPath, setToServerValue: "REQUEST_TIME" })) } : {})
     });
     return this;

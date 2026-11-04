@@ -1,7 +1,7 @@
 import { createFirestoreRest } from "./firestore-rest.js";
 
 const ROOT="projects/gen-lang-client-0623364466/databases/(default)/documents";
-const clean=(v,n)=>typeof v==="string"?v.trim().replace(/\\s+/g," ").slice(0,n):"";
+const clean=(v,n)=>typeof v==="string"?v.trim().replace(/\s+/g," ").slice(0,n):"";
 const validId=(v)=>v.length>0&&v.length<=128&&!v.includes("/");
 const fail=(code,message,status=400)=>Object.assign(new Error(message),{code,status});
 const fields=(snap)=>snap?.fields||{};

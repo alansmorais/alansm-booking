@@ -28,8 +28,12 @@ function decodeJwtPart(value) {
 
 let jwksCache;
 let jwksExpiresAt = 0;
-async function getFirebaseJwks() {
-  if (jwksCache && Date.now() < jwksExpiresAt) return jwksCache;
+export function resetJwksCache() {
+  jwksCache = null;
+  jwksExpiresAt = 0;
+}
+async function getFirebaseJwks(forceRefresh = false) {
+  if (!forceRefresh && jwksCache && Date.now() < jwksExpiresAt) return jwksCache;
   const response = await fetch(FIREBASE_JWKS_URL);
   if (!response.ok) throw new Error("Não foi possível validar a assinatura do token Firebase.");
   const data = await response.json();
@@ -38,28 +42,49 @@ async function getFirebaseJwks() {
   return jwksCache;
 }
 
+function unauthenticated(message) {
+  const error = new Error(message);
+  error.code = "unauthenticated";
+  error.status = 401;
+  return error;
+}
+
 async function verifyFirebaseIdToken(token) {
   const parts = String(token || "").split(".");
-  if (parts.length !== 3) throw new Error("Faça login para continuar.");
-  const header = decodeJwtPart(parts[0]);
-  const claims = decodeJwtPart(parts[1]);
-  if (header.alg !== "RS256" || !header.kid) throw new Error("Token Firebase inválido.");
+  if (parts.length !== 3) throw unauthenticated("Faça login para continuar.");
+  let header, claims;
+  try {
+    header = decodeJwtPart(parts[0]);
+    claims = decodeJwtPart(parts[1]);
+  } catch {
+    throw unauthenticated("Token Firebase inválido.");
+  }
+  if (!header || header.alg !== "RS256" || !header.kid) throw unauthenticated("Token Firebase inválido.");
   const now = Math.floor(Date.now() / 1000);
   if (claims.aud !== PROJECT_ID || claims.iss !== FIREBASE_ISSUER ||
       typeof claims.sub !== "string" || !claims.sub ||
       !Number.isFinite(claims.exp) || claims.exp <= now ||
       !Number.isFinite(claims.iat) || claims.iat > now + 60 ||
       claims.auth_time > now + 60) {
-    throw new Error("Sessão Firebase inválida ou expirada.");
+    throw unauthenticated("Sessão Firebase inválida ou expirada.");
   }
-  const jwk = (await getFirebaseJwks()).find((key) => key.kid === header.kid);
-  if (!jwk) throw new Error("Chave de assinatura Firebase desconhecida.");
-  const publicKey = await crypto.subtle.importKey(
-    "jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]
-  );
-  const signed = new TextEncoder().encode(parts[0] + "." + parts[1]);
-  const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", publicKey, base64UrlToBytes(parts[2]), signed);
-  if (!valid) throw new Error("Assinatura do token Firebase inválida.");
+  let jwk = (await getFirebaseJwks()).find((key) => key.kid === header.kid);
+  if (!jwk) {
+    jwk = (await getFirebaseJwks(true)).find((key) => key.kid === header.kid);
+  }
+  if (!jwk) throw unauthenticated("Chave de assinatura Firebase desconhecida.");
+  let valid = false;
+  try {
+    const publicKey = await crypto.subtle.importKey(
+      "jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]
+    );
+    const signed = new TextEncoder().encode(parts[0] + "." + parts[1]);
+    const sigBytes = base64UrlToBytes(parts[2]);
+    valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", publicKey, sigBytes, signed);
+  } catch {
+    throw unauthenticated("Assinatura do token Firebase inválida.");
+  }
+  if (!valid) throw unauthenticated("Assinatura do token Firebase inválida.");
   return claims;
 }
 
@@ -71,6 +96,9 @@ function pemToArrayBuffer(pem) {
 let googleAccessToken;
 let googleAccessTokenExpiresAt = 0;
 async function getGoogleAccessToken(env) {
+  if (typeof env?.getGoogleAccessToken === "function" && env.getGoogleAccessToken !== getGoogleAccessToken) {
+    return env.getGoogleAccessToken();
+  }
   if (googleAccessToken && Date.now() < googleAccessTokenExpiresAt - 60_000) return googleAccessToken;
   if (!env.GOOGLE_SERVICE_ACCOUNT_JSON) throw new Error("Backend ainda não configurado: falta a credencial segura do Google.");
   const account = JSON.parse(env.GOOGLE_SERVICE_ACCOUNT_JSON);
@@ -116,12 +144,20 @@ async function firestoreRequest(env, path, init = {}) {
   return payload;
 }
 
-function corsHeaders(request, env) {
-  const origin = request.headers.get("Origin") || "";
+function isAllowedOrigin(origin, env) {
+  if (!origin) return false;
   const allowed = (env.ALLOWED_ORIGINS || "https://preview.alansm-booking-preview.pages.dev")
     .split(",").map((item) => item.trim()).filter(Boolean);
+  if (allowed.includes(origin) || allowed.includes("*")) return true;
+  if (/^https:\/\/[a-z0-9-]+\.alansm-booking-preview\.pages\.dev$/.test(origin)) return true;
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  return false;
+}
+
+function corsHeaders(request, env) {
+  const origin = request.headers.get("Origin") || "";
   return {
-    "access-control-allow-origin": allowed.includes(origin) ? origin : "null",
+    "access-control-allow-origin": isAllowedOrigin(origin, env) ? origin : "null",
     "access-control-allow-methods": "GET,POST,OPTIONS",
     "access-control-allow-headers": "Authorization,Content-Type",
     "vary": "Origin"
@@ -205,7 +241,15 @@ export default {
         return json(result, 200, cors);
       } catch (error) {
         const code = error.code || (error.status === 401 ? "unauthenticated" : "internal");
-        const status = error.status || (code === "unauthenticated" ? 401 : code === "permission-denied" ? 403 : code === "already-exists" ? 409 : code === "failed-precondition" ? 412 : code === "invalid-argument" ? 400 : 500);
+        const status = error.status || (
+          code === "unauthenticated" ? 401 :
+          code === "permission-denied" ? 403 :
+          code === "not-found" ? 404 :
+          code === "already-exists" ? 409 :
+          code === "failed-precondition" ? 412 :
+          code === "resource-exhausted" ? 429 :
+          code === "invalid-argument" ? 400 : 500
+        );
         const message = status >= 500 ? "Não foi possível concluir a operação. Tente novamente." : (error.message || "Não foi possível concluir a operação.");
         return json({ error: { code, message } }, status, cors);
       }

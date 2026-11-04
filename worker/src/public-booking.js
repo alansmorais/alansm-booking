@@ -7,6 +7,7 @@ const slugify=v=>v.normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase(
 const reserved=new Set(["admin","administrator","api","app","assets","auth","booking","dashboard","help","login","logout","public","register","root","settings","support","www"]);
 const dateOK=v=>{if(typeof v!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const d=new Date(v+"T00:00:00.000Z");return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===v;};
 const minutes=v=>{if(typeof v!=="string"||!/^([01]\d|2[0-3]):[0-5]\d$/.test(v))return null;const [h,m]=v.split(":").map(Number);return h*60+m;};
+const auditId=()=>crypto.randomUUID().replace(/-/g,"");
 function localParts(date,timezone){const parts=new Intl.DateTimeFormat("en-US",{timeZone:timezone,year:"numeric",month:"2-digit",day:"2-digit",weekday:"short",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(date),get=k=>parts.find(p=>p.type===k)?.value||"";return{date:get("year")+"-"+get("month")+"-"+get("day"),weekday:({Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6})[get("weekday")],minute:Number(get("hour"))*60+Number(get("minute"))};}
 function covers(periods,start,end){return Array.isArray(periods)&&periods.some(p=>{const a=minutes(p?.start),b=minutes(p?.end);if(a===null||b===null||a>=b||start<a||end>b)return false;return !(Array.isArray(p.breaks)?p.breaks:[]).some(x=>{const c=minutes(x?.start),d=minutes(x?.end);return c!==null&&d!==null&&c<d&&start<d&&c<end;});});}
 const eq=(field,value)=>({fieldFilter:{field:{fieldPath:field},op:"EQUAL",value:{stringValue:value}}});
